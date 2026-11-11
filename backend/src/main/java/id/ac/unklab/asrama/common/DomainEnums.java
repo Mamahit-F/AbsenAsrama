@@ -34,7 +34,8 @@ public final class DomainEnums {
         KIRI("left"),
         KANAN("right"),
         ATAS("up"),
-        BAWAH("down");
+        BAWAH("down"),
+        UNKNOWN("unknown");
 
         private final String filePrefix;
 
@@ -58,7 +59,14 @@ public final class DomainEnums {
                 case "KANAN", "SLIGHT_RIGHT", "RIGHT" -> KANAN;
                 case "ATAS", "SLIGHT_UP", "UP" -> ATAS;
                 case "BAWAH", "SLIGHT_DOWN", "DOWN" -> BAWAH;
-                default -> FacePose.valueOf(normalized);
+                case "UNKNOWN" -> UNKNOWN;
+                default -> {
+                    try {
+                        yield FacePose.valueOf(normalized);
+                    } catch (Exception e) {
+                        yield UNKNOWN;
+                    }
+                }
             };
         }
     }
