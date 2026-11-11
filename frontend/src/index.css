@@ -1,0 +1,317 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   Presensi Asrama — "Night & Soft" design system
+   Light zone: soft lavender-grey surfaces that are pressed out of / into the page.
+   Night zone: deep indigo panels joined to the light zone by a wave edge.
+   Accent: magenta → violet → indigo gradient, periwinkle for progress.
+   ========================================================================== */
+@theme {
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", "Figtree", ui-sans-serif, sans-serif;
+  --font-mono: "Outfit", ui-sans-serif, sans-serif;
+
+  /* light zone */
+  --color-background: #e6e7f1;
+  --color-surface: #eeeff7;
+  --color-surface-2: #e9eaf4;
+  --color-raise: #f7f7fc;
+  --color-foreground: #1a1838;
+  --color-muted: #545878; /* 6.4:1 on surface */
+  --color-subtle: #6b6f8f; /* 4.6:1 on surface */
+  --color-line: #d9dbea;
+  --color-line-strong: #c6c9de;
+
+  /* night zone */
+  --color-night: #1d1b46;
+  --color-night-2: #2a2766;
+  --color-night-3: #121030;
+  --color-night-ink: #e9e8ff;
+  --color-night-muted: #a9a7d6;
+
+  /* accent */
+  --color-primary: #6d28d9;
+  --color-primary-strong: #5b21b6;
+  --color-primary-soft: #ece4fd;
+  --color-magenta: #c026d3;
+  --color-secondary: #7c83f7; /* periwinkle */
+  --color-periwinkle: #7c83f7;
+  --color-lavender: #b8b5f5;
+  --color-amber: #f5a524;
+  --color-sky: #a5b4fc;
+  --color-mist: #d9dbea;
+  --color-ice: #f3f3fb;
+
+  /* status */
+  --color-success: #0f8a5f;
+  --color-success-soft: #dcf3e9;
+  --color-danger: #c2264f;
+  --color-danger-soft: #fbe3ea;
+  --color-warning: #9a5b00;
+  --color-warning-soft: #fdeed3;
+  --color-live: #34d399;
+
+  /* popover / chart (components/ui/area-chart) */
+  --color-popover: #1d1b46;
+  --color-popover-foreground: #ffffff;
+  --color-chart-label: #6b6f8f;
+  --color-chart-tooltip-foreground: #ffffff;
+  --color-chart-tooltip-muted: #b9b7e6;
+
+  --radius-card: 1.75rem;
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+:root {
+  --foreground: #1a1838;
+  --background: #e6e7f1;
+  --primary: #6d28d9;
+  --secondary: #7c83f7;
+  --destructive: #c2264f;
+
+  --grad-accent: linear-gradient(115deg, #c026d3 0%, #7c3aed 48%, #2e1a7a 100%);
+  --grad-night: linear-gradient(165deg, #2c2971 0%, #1d1b46 55%, #141236 100%);
+
+  /* soft shadows — light from top-left */
+  --sh-raise: -7px -7px 16px rgba(255, 255, 255, 0.9), 9px 11px 22px rgba(86, 90, 150, 0.22);
+  --sh-raise-sm: -4px -4px 10px rgba(255, 255, 255, 0.9), 5px 6px 12px rgba(86, 90, 150, 0.2);
+  --sh-inset: inset 4px 5px 10px rgba(86, 90, 150, 0.2), inset -5px -5px 10px rgba(255, 255, 255, 0.85);
+
+  --chart-background: #eeeff7;
+  --chart-foreground: #1a1838;
+  --chart-foreground-muted: #6b6f8f;
+  --chart-label: #6b6f8f;
+  --chart-line-primary: #9333ea;
+  --chart-line-secondary: #c026d3;
+  --chart-crosshair: #b8b5f5;
+  --chart-grid: #d3d5e7;
+  --chart-indicator-color: #7c3aed;
+  --chart-indicator-secondary-color: #c026d3;
+  --chart-marker-background: #eeeff7;
+  --chart-marker-border: #c6c9de;
+  --chart-marker-foreground: #1a1838;
+  --chart-marker-badge-background: #1d1b46;
+  --chart-marker-badge-foreground: #ffffff;
+  --chart-segment-background: #ece4fd;
+  --chart-segment-line: #7c3aed;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    background: var(--color-background);
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-sans text-foreground antialiased;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  button,
+  [role="button"],
+  a {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2.5px solid #7c3aed;
+    outline-offset: 3px;
+    border-radius: 14px;
+  }
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+  ::selection {
+    background: #e2d4fb;
+  }
+}
+
+/* ---------- Light zone surfaces ---------- */
+@utility soft {
+  background: linear-gradient(145deg, #f3f4fb, #e8e9f3);
+  box-shadow: var(--sh-raise);
+}
+@utility soft-sm {
+  background: linear-gradient(145deg, #f3f4fb, #e8e9f3);
+  box-shadow: var(--sh-raise-sm);
+}
+@utility soft-inset {
+  background: #e4e5f0;
+  box-shadow: var(--sh-inset);
+}
+
+/* ---------- Night zone ---------- */
+@utility night {
+  color: var(--color-night-ink);
+  background: var(--grad-night);
+}
+/* glassy card sitting on a night panel (MyDocs card) */
+@utility night-card {
+  color: #fff;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 22px 40px -22px rgba(5, 3, 30, 0.8);
+}
+@utility night-inset {
+  background: rgba(10, 8, 40, 0.45);
+  box-shadow:
+    inset 0 2px 6px rgba(0, 0, 0, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ---------- Accent ---------- */
+@utility grad-accent {
+  color: #fff;
+  background: var(--grad-accent);
+  box-shadow: 0 12px 24px -12px rgba(124, 58, 237, 0.75);
+}
+@utility grad-text {
+  background: var(--grad-accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- Legacy names → new system (keeps every page consistent) ---------- */
+@utility glass {
+  background: linear-gradient(145deg, #f3f4fb, #e8e9f3);
+  box-shadow: var(--sh-raise);
+}
+@utility glass-soft {
+  background: #e4e5f0;
+  box-shadow: var(--sh-inset);
+}
+@utility glass-navy {
+  color: var(--color-night-ink);
+  background: var(--grad-night);
+  box-shadow: 0 24px 44px -24px rgba(20, 18, 54, 0.85);
+}
+@utility glass-chip {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+@utility btn-primary {
+  color: #fff;
+  background: var(--grad-accent);
+  box-shadow: 0 12px 24px -12px rgba(124, 58, 237, 0.75);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+@utility eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--color-background);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateY(-10%);
+  }
+  100% {
+    transform: translateY(110%);
+  }
+}
+.scan-sweep {
+  animation: sweep 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+@keyframes live-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+.live-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--color-live);
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: live-ping 1.6s var(--ease-out-quart) infinite;
+}
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee {
+  animation: marquee 32s linear infinite;
+}
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.float-y {
+  animation: float-y 5s ease-in-out infinite;
+}

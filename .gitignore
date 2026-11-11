@@ -1,0 +1,64 @@
+# ==========================================
+# Absenasrama .gitignore
+# ==========================================
+
+# 1. Environment & Secrets (SANGAT KRUSIAL - JANGAN DI-PUSH)
+.env
+.env*
+*.env
+.env.example
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+*.jks
+backend/.env*
+frontend/.env*
+ai_service/.env*
+
+# 2. Node Dependencies
+node_modules/
+frontend/node_modules/
+.npm/
+
+# 3. Python Virtual Environments & Cache
+venv/
+.venv/
+env/
+ENV/
+__pycache__/
+*/__pycache__/
+ai_service/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# 4. Java / Spring Boot Build Outputs
+backend/target/
+target/
+*.class
+*.jar
+*.war
+
+# 5. Frontend Build Outputs
+frontend/dist/
+dist/
+
+# 6. IDE, Editors & OS Files
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# 7. Local Agent Tools, Backups & Caches
+_backup/
+graphify-out/
+.agents/
+.claude/
+.system_generated/
+*.log

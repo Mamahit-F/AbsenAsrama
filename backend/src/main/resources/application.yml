@@ -1,0 +1,82 @@
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /
+  error:
+    include-message: always
+    include-binding-errors: always
+
+spring:
+  application:
+    name: asrama-presensi-backend
+  jackson:
+    time-zone: Asia/Makassar
+    serialization:
+      write-dates-as-timestamps: false
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?options=-c%20TimeZone=Asia/Makassar}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres.tjgttljfdlcwxbregzqs}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: AsramaPresensiHikariPool
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:15}
+      minimum-idle: ${DB_POOL_MIN_IDLE:3}
+      connection-timeout: 5000
+      validation-timeout: 2500
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      auto-commit: false
+
+app:
+  timezone: Asia/Makassar
+  rls:
+    enabled: ${APP_RLS_ENABLED:true}
+  jwt:
+    secret: ${JWT_SECRET:ChangeThisSecretKeyToAtLeast256BitsForProductionAsramaPresensi2026!}
+    issuer: ${JWT_ISSUER:asrama-presensi-backend}
+    access-token-expiration-ms: ${JWT_ACCESS_EXPIRATION_MS:900000}
+    refresh-token-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+  rate-limit:
+    auth-requests-per-minute: ${RATE_LIMIT_AUTH_RPM:20}
+    scan-requests-per-minute: ${RATE_LIMIT_SCAN_RPM:30}
+  face:
+    similarity-threshold: ${FACE_SIMILARITY_THRESHOLD:0.65}
+    duplicate-threshold: ${FACE_DUPLICATE_THRESHOLD:0.70}
+    liveness-threshold: ${FACE_LIVENESS_THRESHOLD:0.70}
+    quality-threshold: ${FACE_QUALITY_THRESHOLD:0.65}
+    model-version: ${FACE_MODEL_VERSION:ArcFace-r100}
+    retention-days: ${FACE_RETENTION_DAYS:90}
+  ai:
+    base-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
+    api-key: ${AI_SERVICE_API_KEY:dev-ai-internal-key}
+    connect-timeout-ms: ${AI_CONNECT_TIMEOUT_MS:1000}
+    read-timeout-ms: ${AI_READ_TIMEOUT_MS:2200}
+  storage:
+    supabase-url: ${SUPABASE_URL:https://tjgttljfdlcwxbregzqs.supabase.co}
+    service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
+    bucket: ${SUPABASE_FACE_BUCKET:face-enrollments}
+    signed-url-ttl-seconds: ${SUPABASE_STORAGE_SIGNED_URL_TTL:120}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
