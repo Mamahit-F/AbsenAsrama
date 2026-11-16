@@ -125,21 +125,20 @@ export default function ResidentHistory() {
 
   return (
     <Page>
-      <NightHeader className="pb-24">
-        <div className="flex items-end justify-between pt-3">
+      <NightHeader className="pb-6">
+        <div className="flex items-end justify-between pt-2">
           <div>
-            <p className="text-[13px] text-night-muted">Riwayat presensi</p>
+            <p className="text-[13px] ink-4">Riwayat presensi</p>
             <motion.h1
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, ease: easeOut }}
-              className="text-[32px] font-bold text-white"
+              className="hero-metric-wrap text-[30px] font-bold ink-1"
             >
               {picked === w.date ? "Hari ini" : fmtDate(picked, { weekday: "long" })}
             </motion.h1>
           </div>
           <Segmented
-            dark
             className="w-[150px]"
             value={range}
             onChange={(v) => {
@@ -153,7 +152,7 @@ export default function ResidentHistory() {
           />
         </div>
 
-        <div className="no-scrollbar -mx-5 mt-6 flex gap-3 overflow-x-auto px-5 pb-2" role="listbox" aria-label="Pilih tanggal">
+        <div className="no-scrollbar -mx-2 mt-5 flex gap-3 overflow-x-auto px-2 pb-2" role="listbox" aria-label="Pilih tanggal">
           {days.map((d, i) => {
             const on = d === picked;
             const hits = rows.filter((r) => r.date === d);
@@ -162,29 +161,30 @@ export default function ResidentHistory() {
               <motion.button
                 key={d}
                 role="option"
+                data-wave-sync=""
                 aria-selected={on}
                 onClick={() => setPicked(d)}
                 initial={{ opacity: 0, y: -30 }}
-                animate={{ opacity: 1, y: on ? 10 : 0 }}
+                animate={{ opacity: 1, y: on ? 6 : 0 }}
                 transition={{ ...spring, delay: Math.min(i, 8) * 0.04 }}
                 whileTap={{ scale: 0.92 }}
                 className={cn(
-                  "relative flex h-[104px] w-[58px] shrink-0 flex-col items-center justify-end rounded-b-full rounded-t-[14px] pb-4 transition-colors duration-300",
+                  "relative flex h-[96px] w-[58px] shrink-0 flex-col items-center justify-end rounded-b-full rounded-t-[14px] pb-4 transition-colors duration-300",
                   on
-                    ? "bg-gradient-to-b from-[#8b88e8] to-[#5b56c9] text-white shadow-[0_16px_28px_-12px_rgba(91,86,201,.9),inset_0_2px_0_rgba(255,255,255,.25)]"
-                    : "bg-[#3a3690] text-white/80 shadow-[inset_0_2px_0_rgba(255,255,255,.08)]",
+                    ? "bg-gradient-to-b from-[#3CC4AE] via-[#0E8F7E] to-[#0A5C51] text-white shadow-[0_16px_28px_-12px_rgba(10,92,81,.9),inset_0_2px_0_rgba(213,240,234,.35)]"
+                    : "micro-glass ink-2",
                 )}
               >
                 <span className="font-display text-[20px] font-semibold leading-none tabular">{fmtDate(d, { day: "numeric" })}</span>
                 {on && <span className="mt-1 text-[11px] font-semibold uppercase">{fmtDate(d, { month: "short" })}</span>}
-                {hits.length > 0 && <span className={cn("absolute top-2.5 size-1.5 rounded-full", ok ? "bg-[#6ee7b7]" : "bg-[#fda4af]")} aria-hidden />}
+                {hits.length > 0 && <span className={cn("absolute top-2.5 size-1.5 rounded-full", ok ? "bg-[#34d399]" : "bg-[#fb7185]")} aria-hidden />}
               </motion.button>
             );
           })}
         </div>
       </NightHeader>
 
-      <div className="-mt-4 grid grid-cols-2 gap-4">
+      <div className="relative z-10 -mt-4 grid grid-cols-2 gap-4 lg:mt-4">
         <Card className="flex items-center gap-3 !p-4">
           <IconTile icon={CalendarCheck2} paint="mint" size={46} />
           <div>
@@ -241,7 +241,7 @@ export default function ResidentHistory() {
                   transition={{ ...spring, delay: i * 0.06 }}
                   className="soft flex items-center gap-4 rounded-[26px] p-4"
                 >
-                  <span className={cn("soft-inset grid size-11 shrink-0 place-items-center rounded-full")}>
+                  <span className={cn("grid size-11 shrink-0 place-items-center rounded-full", r.hadir ? "bg-success/12" : "bg-danger/12")}>
                     <span className={cn("size-3.5 rounded-full", r.hadir ? "bg-success" : "bg-danger")} />
                   </span>
                   <div className="min-w-0 flex-1">

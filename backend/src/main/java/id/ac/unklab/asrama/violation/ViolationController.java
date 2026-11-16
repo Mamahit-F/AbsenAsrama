@@ -19,7 +19,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1")
 @Tag(name = "07. Violations, Coaching & Help Requests",
-        description = "Perhitungan dan riwayat poin pelanggaran, catatan pembinaan Village Dean, serta permintaan bantuan & laporan tindak lanjut")
+        description = "Perhitungan dan riwayat poin pelanggaran, catatan pembinaan penghuni, serta permintaan bantuan & laporan tindak lanjut")
 public class ViolationController {
 
     private final ViolationService violationService;
@@ -54,7 +54,7 @@ public class ViolationController {
     }
 
     @PostMapping("/violations")
-    @PreAuthorize("hasAnyRole('ADMIN', 'VILLAGE_DEAN', 'MONITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
     @Operation(summary = "Mencatat pelanggaran manual dengan alasan wajib")
     public ResponseEntity<ApiResponse<ViolationDto>> createManualViolation(
             @Valid @RequestBody CreateManualViolationRequest request
@@ -65,7 +65,7 @@ public class ViolationController {
     }
 
     @PatchMapping("/violations/{violationId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'VILLAGE_DEAN', 'MONITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
     @Operation(summary = "Mengubah poin atau status pelanggaran (ACTIVE / VOID) dengan riwayat perubahan")
     public ResponseEntity<ApiResponse<ViolationDto>> updateViolation(
             @PathVariable UUID violationId,
@@ -92,8 +92,8 @@ public class ViolationController {
     }
 
     @PostMapping({"/coaching", "/violations/coaching"})
-    @PreAuthorize("hasAnyRole('ADMIN', 'VILLAGE_DEAN')")
-    @Operation(summary = "Menambahkan catatan pembinaan penghuni oleh Village Dean / Admin")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Menambahkan catatan pembinaan penghuni oleh Admin")
     public ResponseEntity<ApiResponse<CoachingRecordDto>> createCoaching(
             @Valid @RequestBody CreateCoachingRecordRequest request
     ) {
@@ -113,7 +113,7 @@ public class ViolationController {
     }
 
     @PostMapping({"/help-requests", "/violations/help-requests", "/attendance/request-help"})
-    @Operation(summary = "Mengajukan permintaan bantuan (PENGHUNI) atau laporan tindak lanjut (MONITOR/VILLAGE_DEAN/ADMIN)")
+    @Operation(summary = "Mengajukan permintaan bantuan (PENGHUNI) atau laporan tindak lanjut (MONITOR/ADMIN)")
     public ResponseEntity<ApiResponse<HelpRequestDto>> createHelpRequest(
             @Valid @RequestBody CreateHelpRequestDto request
     ) {
@@ -123,7 +123,7 @@ public class ViolationController {
     }
 
     @PatchMapping({"/help-requests/{requestId}/status", "/violations/help-requests/{requestId}/status"})
-    @PreAuthorize("hasAnyRole('ADMIN', 'VILLAGE_DEAN', 'MONITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
     @Operation(summary = "Memperbarui status penanganan permintaan bantuan / laporan tindak lanjut")
     public ResponseEntity<ApiResponse<HelpRequestDto>> updateHelpRequestStatus(
             @PathVariable UUID requestId,

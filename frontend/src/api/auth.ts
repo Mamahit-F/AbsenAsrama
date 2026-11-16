@@ -3,19 +3,10 @@ import type {
   AuthTokenResponse,
   ChangePasswordRequest,
   LoginRequest,
-  RegisterResidentRequest,
   UserSessionDto,
 } from "./types";
 
 export const authApi = {
-  async register(payload: RegisterResidentRequest): Promise<UserSessionDto> {
-    return apiRequest<UserSessionDto>("/auth/register", {
-      method: "POST",
-      body: payload,
-      skipAuth: true,
-    });
-  },
-
   async login(payload: LoginRequest): Promise<AuthTokenResponse> {
     const data = await apiRequest<AuthTokenResponse>("/auth/login", {
       method: "POST",
@@ -56,9 +47,14 @@ export const authApi = {
   },
 
   async changePassword(payload: ChangePasswordRequest): Promise<void> {
+    const body = {
+      old_password: payload.old_password ?? payload.currentPassword,
+      new_password: payload.new_password ?? payload.newPassword,
+      confirm_password: payload.confirm_password ?? payload.new_password ?? payload.newPassword,
+    };
     return apiRequest<void>("/auth/change-password", {
       method: "POST",
-      body: payload,
+      body,
     });
   },
 };

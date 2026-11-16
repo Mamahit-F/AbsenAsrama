@@ -14,8 +14,13 @@ public record AppPrincipal(
         String username,
         UserRole role,
         UUID residentId,
-        String tokenJti
+        String tokenJti,
+        String hallName
 ) implements UserDetails {
+
+    public AppPrincipal(UUID userId, String username, UserRole role, UUID residentId, String tokenJti) {
+        this(userId, username, role, residentId, tokenJti, null);
+    }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {

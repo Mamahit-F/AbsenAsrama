@@ -3,6 +3,7 @@ package id.ac.unklab.asrama.resident;
 import id.ac.unklab.asrama.common.BusinessException;
 import id.ac.unklab.asrama.common.DomainEnums.ResidenceCategory;
 import id.ac.unklab.asrama.common.DomainEnums.ResidentStatus;
+import id.ac.unklab.asrama.common.DomainEnums.UserRole;
 import id.ac.unklab.asrama.resident.ResidentDtos.*;
 import id.ac.unklab.asrama.security.SecurityUtils;
 import org.springframework.stereotype.Service;
@@ -46,7 +47,44 @@ public class ResidentService {
             Integer limit,
             Integer offset
     ) {
-        return residentRepository.searchResidents(status, category, search, limit, offset);
+        String guardHall = null;
+        if (securityUtils.getCurrentRole() == UserRole.MONITOR) {
+            guardHall = securityUtils.getCurrentHallName();
+        }
+        return residentRepository.searchResidents(status, category, search, guardHall, limit, offset);
+    }
+
+    @Transactional
+    public ResidentProfileDto claimResidentToGuardHall(String nim) {
+        String guardHall = securityUtils.getCurrentHallName();
+        if (guardHall == null || guardHall.isBlank()) {
+            throw BusinessException.badRequest("NO_GUARD_HALL",
+                    "Akun penjaga Anda belum ditugaskan ke Hall manapun. Hubungi Admin.");
+        }
+
+        ResidentProfileDto resident = residentRepository.findByNim(nim.trim())
+                .orElseThrow(() -> BusinessException.notFound("NIM_NOT_FOUND", "NIM penghuni tidak ditemukan"));
+
+        if (resident.hallName() != null && !resident.hallName().isBlank()) {
+            if (resident.hallName().equalsIgnoreCase(guardHall)) {
+                return resident;
+            } else {
+                throw BusinessException.conflict("ALREADY_IN_OTHER_HALL",
+                        "Penghuni dengan NIM ini sudah terdaftar di " + resident.hallName() + " dan tidak dapat ditambahkan ke Hall Anda");
+            }
+        }
+
+        residentRepository.updateResidentHall(resident.id(), guardHall);
+        return residentRepository.findById(resident.id()).orElseThrow();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ResidentProfileDto> getResidentsByGuardHall() {
+        String guardHall = securityUtils.getCurrentHallName();
+        if (guardHall == null || guardHall.isBlank()) {
+            return List.of();
+        }
+        return residentRepository.findByHall(guardHall);
     }
 
     @Transactional(readOnly = true)

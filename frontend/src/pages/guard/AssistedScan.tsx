@@ -22,6 +22,7 @@ import {
 } from "../../api";
 import { useAuth, useToast } from "../../state/app";
 import { toWitaTime, wita } from "../../lib/utils";
+import { useAiRecoveryPoll } from "../../lib/useAiRecoveryPoll";
 
 const STEPS = [
   "Memvalidasi sesi aktif & alasan penjaga",
@@ -40,6 +41,7 @@ export default function AssistedScan() {
   const [eligibleResidents, setEligibleResidents] = useState<ResidentProfileDto[]>([]);
   const [activeSess, setActiveSess] = useState<SessionDto | null>(null);
   const [aiAvailable, setAiAvailable] = useState<boolean>(true);
+  const [aiStarting, setAiStarting] = useState<boolean>(false);
   const [camAccess, setCamAccess] = useState<CamAccessState>("loading");
   const [loadingInit, setLoadingInit] = useState(true);
 
@@ -60,13 +62,14 @@ export default function AssistedScan() {
       const [resList, actSess, aiStat] = await Promise.all([
         residentsApi.listResidents({ status: "AKTIF", limit: 300 }),
         schedulesApi.getActiveSession(),
-        attendanceApi.getAiStatus().catch(() => ({ available: false, healthy: false, service: "AI", status: "OFFLINE" })),
+        attendanceApi.getAiStatus().catch(() => ({ available: false, healthy: false, starting: false, service: "AI", status: "OFFLINE" })),
       ]);
       // J-05: Hanya penghuni berstatus AKTIF dengan profil wajah aktif yang dapat diproses scan dibantu penjaga
       const withFace = resList.filter((r) => r.status === "AKTIF" && r.hasActiveFaceProfile);
       setEligibleResidents(withFace);
       setActiveSess(actSess);
       setAiAvailable(Boolean(aiStat.available && aiStat.healthy));
+      setAiStarting(Boolean(aiStat.starting || aiStat.status === "STARTING"));
 
       const paramId = params.get("residentId");
       if (paramId && withFace.some((r) => r.id === paramId)) {
@@ -83,12 +86,23 @@ export default function AssistedScan() {
     void loadInit();
   }, [loadInit]);
 
+  const handleAiStatus = useCallback((online: boolean, starting: boolean) => {
+    setAiAvailable(online);
+    setAiStarting(starting);
+  }, []);
+
+  useAiRecoveryPoll(!loadingInit && !aiAvailable, handleAiStatus);
+
   const selectedResident = eligibleResidents.find((r) => r.id === residentId);
   const w = wita();
 
   const cam: CamState = result ? (result.ok ? "ok" : "fail") : step >= 0 ? "scanning" : "idle";
 
   const runScan = async () => {
+    if (!activeSess || activeSess.status !== "OPEN" || Date.parse(activeSess.endsAt) <= Date.now()) {
+      setErrReason("Sesi sudah ditutup atau belum dibuka. Scan wajah tidak tersedia; gunakan Presensi Manual.");
+      return;
+    }
     if (!reason.trim()) {
       setErrReason("Alasan wajib diisi sebelum memindai wajah penghuni.");
       return;
@@ -138,7 +152,7 @@ export default function AssistedScan() {
     } catch (err) {
       if (isApiError(err)) {
         const failedAt =
-          err.code === "NO_ACTIVE_SESSION"
+          err.code === "NO_ACTIVE_SESSION" || err.code === "SESSION_CLOSED"
             ? 0
             : err.code === "LIVENESS_FAILED"
               ? 1
@@ -182,12 +196,18 @@ export default function AssistedScan() {
         title="Bantu scan wajah"
         sub={
           activeSess
-            ? `${activeSess.scheduleName} · ${toWitaTime(activeSess.startsAt)}–${toWitaTime(activeSess.endsAt)} WITA`
-            : "Tidak ada sesi presensi aktif"
+            ? `${activeSess.scheduleName} (${user?.hallName || "Hall"}) · ${toWitaTime(activeSess.startsAt)}–${toWitaTime(activeSess.endsAt)} WITA`
+            : user?.hallName
+              ? `Monitor ${user.hallName} · Tidak ada sesi aktif`
+              : "Tidak ada sesi presensi aktif"
         }
         right={
           <button
-            onClick={() => nav(`/penjaga/manual${residentId ? `?residentId=${residentId}` : ""}`)}
+            onClick={() =>
+              nav(
+                `/penjaga/manual${residentId ? `?residentId=${residentId}${activeSess?.id ? `&sessionId=${activeSess.id}` : ""}` : ""}`,
+              )
+            }
             className="soft-sm flex h-10 items-center gap-1 rounded-full px-3.5 text-xs font-semibold text-primary"
           >
             <ClipboardPen className="size-3.5" aria-hidden /> Manual
@@ -196,7 +216,7 @@ export default function AssistedScan() {
       />
 
       {!aiAvailable && (
-        <Card className="mb-3 flex items-start gap-2.5 !bg-warning-soft p-3.5 text-xs text-warning">
+        <Card glass={false} className="mb-3 flex items-start gap-2.5 !bg-warning-soft p-3.5 text-xs text-warning">
           <WifiOff className="mt-0.5 size-4 shrink-0" aria-hidden />
           <div className="flex-1">
             <p className="font-semibold">Layanan AI sedang tidak tersedia</p>
@@ -212,7 +232,7 @@ export default function AssistedScan() {
           {activeSess ? `Sesi aktif: ${activeSess.scheduleName}` : "Tidak ada sesi presensi aktif"}
         </Badge>
         <Badge tone={aiAvailable ? "info" : "warning"}>
-          {aiAvailable ? "Verifikasi 1:1 (J-05)" : "AI Offline"}
+          {aiAvailable ? "Verifikasi 1:1 (J-05)" : aiStarting ? "Menyalakan AI…" : "AI Offline"}
         </Badge>
       </div>
 

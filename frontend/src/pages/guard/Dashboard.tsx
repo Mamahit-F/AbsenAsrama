@@ -104,80 +104,99 @@ export default function GuardDashboard() {
 
   const quick = [
     { label: "Bantu scan", icon: <ScanFace className="size-5" stroke="url(#g-violet)" />, onSelect: () => nav("/penjaga/bantu-scan") },
-    { label: "Manual", icon: <ClipboardPen className="size-5" stroke="url(#g-amber)" />, onSelect: () => nav("/penjaga/manual") },
+    { label: "Manual", icon: <ClipboardPen className="size-5" stroke="url(#g-amber)" />, onSelect: () => nav("/penjaga/kehadiran") },
     { label: "Jadwal", icon: <CalendarClock className="size-5" stroke="url(#g-sky)" />, onSelect: () => nav("/penjaga/jadwal") },
     { label: "Rekap", icon: <FileSpreadsheet className="size-5" stroke="url(#g-mint)" />, onSelect: () => nav("/penjaga/rekap") },
     { label: "Kehadiran", icon: <ClipboardList className="size-5" stroke="url(#g-rose)" />, onSelect: () => nav("/penjaga/kehadiran") },
   ];
 
-  const roleLabel = user?.backendRole === "VILLAGE_DEAN" ? "Village Dean" : "Penjaga";
+  const roleLabel = "Penjaga";
 
   return (
     <Page>
       <NightHeader
         left={
-          <IconButton label="Akun penjaga" tone="navy" onClick={() => nav("/penjaga/akun")}>
+          <IconButton label="Akun penjaga" tone="glass" onClick={() => nav("/penjaga/akun")}>
             <Settings className="size-5" aria-hidden />
           </IconButton>
         }
         center={<Avatar name={user!.name} size={46} />}
         right={
-          <IconButton label="Daftar kehadiran" tone="navy" onClick={() => nav("/penjaga/kehadiran")}>
+          <IconButton label="Daftar kehadiran" tone="glass" onClick={() => nav("/penjaga/kehadiran")}>
             <ClipboardList className="size-5" aria-hidden />
           </IconButton>
         }
       >
-        <p className="mt-6 text-[13px] text-night-muted">{fmtLongToday()} · {roleLabel}</p>
-        <motion.h1 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: easeOut }} className="text-[30px] font-bold text-white">
-          {user!.name.split(" ")[0]}
-        </motion.h1>
-
-        <motion.div initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring, delay: 0.2 }} className="night-card mt-5 rounded-[30px] p-5">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2 text-[12px] font-medium text-night-muted">
-              {active ? <LiveDot /> : <span className="size-2 rounded-full bg-white/30" aria-hidden />}
-              {loading
-                ? "Memuat ringkasan sesi…"
-                : active
-                  ? active.scheduleName
-                  : `Ringkasan · ${recap?.scheduleName ?? "Hari ini"}`}
-            </span>
-            <span className="font-display text-[12px] text-night-muted tabular">{w.time} WITA</span>
-          </div>
-          <div className="mt-4 flex items-center gap-5">
-            <Ring value={totalCount ? hadirCount / totalCount : 0} size={104} stroke={10} dark>
-              <span className="font-display text-xl font-semibold text-white tabular">
-                {totalCount ? Math.round((hadirCount / totalCount) * 100) : 0}%
-              </span>
-            </Ring>
-            <div>
-              <p className="font-display text-[44px] font-semibold leading-none text-white tabular">
-                <Num value={hadirCount} />
-                <span className="text-xl text-night-muted">/{totalCount}</span>
-              </p>
-              <p className="mt-1.5 text-[13px] text-night-muted">penghuni sudah hadir</p>
+        <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 max-w-lg">
+            <p className="flex flex-wrap items-center gap-2 text-[12.5px] font-semibold ink-4">
+              <span>{fmtLongToday()} · {roleLabel}</span>
+              {user?.hallName && (
+                <span className="inline-flex items-center gap-1.5 font-display text-[12px] font-semibold ink-teal">
+                  <span className="size-1.5 rounded-full bg-current" aria-hidden />
+                  {user.hallName}
+                </span>
+              )}
+            </p>
+            <motion.h1 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: easeOut }} className="hero-metric-wrap mt-1.5 text-[32px] font-bold leading-tight tracking-tight ink-1">
+              Halo, {user!.name.split(" ")[0]}
+            </motion.h1>
+            <div className="mt-4 grid grid-cols-4 divide-x divide-line/50 border-t border-line/50 pt-3.5 text-center">
+              {[
+                ["Hadir", hadirCount],
+                ["Absen", tidakHadirCount],
+                ["Manual", manualCount],
+                ["Dibantu", assistedCount],
+              ].map(([lbl, val]) => (
+                <div key={lbl} className="px-2">
+                  <p className="font-display text-lg font-bold ink-1 tabular">
+                    <Num value={Number(val)} />
+                  </p>
+                  <p className="text-[11px] font-medium ink-4">{lbl}</p>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="night-inset mt-5 grid grid-cols-4 rounded-[20px] py-2.5 text-center">
-            {[
-              ["Hadir", hadirCount],
-              ["Absen", tidakHadirCount],
-              ["Manual", manualCount],
-              ["Dibantu", assistedCount],
-            ].map(([lbl, val]) => (
-              <div key={lbl}>
-                <p className="font-display text-lg font-semibold text-white tabular">
-                  <Num value={Number(val)} />
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...spring, delay: 0.16 }}
+            className="w-full shrink-0 border-t border-line/50 pt-4 lg:w-[300px] lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex min-w-0 items-center gap-2 truncate text-[12px] font-semibold ink-3">
+                {active ? <LiveDot /> : <span className="size-2 shrink-0 rounded-full bg-current opacity-30" aria-hidden />}
+                <span className="truncate">
+                  {loading
+                    ? "Memuat ringkasan sesi…"
+                    : active
+                      ? active.scheduleName
+                      : `Ringkasan · ${recap?.scheduleName ?? "Hari ini"}`}
+                </span>
+              </span>
+              <span className="shrink-0 font-display text-[11.5px] font-semibold ink-4 tabular">{w.time} WITA</span>
+            </div>
+            <div className="mt-4 flex items-center gap-4">
+              <Ring value={totalCount ? hadirCount / totalCount : 0} size={88} stroke={9}>
+                <span className="hero-metric-wrap font-display text-[17px] font-bold ink-1 tabular">
+                  {totalCount ? Math.round((hadirCount / totalCount) * 100) : 0}%
+                </span>
+              </Ring>
+              <div className="min-w-0">
+                <p className="hero-metric-wrap font-display text-[36px] font-bold leading-none ink-1 tabular">
+                  <Num value={hadirCount} />
+                  <span className="text-lg font-semibold ink-4">/{totalCount}</span>
                 </p>
-                <p className="text-[11px] text-night-muted">{lbl}</p>
+                <p className="mt-1.5 text-[12px] ink-4">penghuni sudah hadir</p>
               </div>
-            ))}
-          </div>
-        </motion.div>
+            </div>
+          </motion.div>
+        </div>
       </NightHeader>
 
       {error && (
-        <Card className="-mt-4 mb-3 flex items-center justify-between gap-3 p-4">
+        <Card className="-mt-2 mb-3 flex items-center justify-between gap-3 p-4">
           <p className="text-xs font-semibold text-danger">{error}</p>
           <Button size="sm" variant="glass" onClick={() => void loadDashboard()} icon={<RefreshCw className="size-3.5" />}>
             Ulangi
@@ -188,15 +207,15 @@ export default function GuardDashboard() {
       <SectionTitle>Aksi cepat</SectionTitle>
       <Card className="flex flex-col items-center !pb-9 !pt-6">
         <CircleMenu items={quick} label="Buka aksi cepat penjaga" defaultOpen />
-        <p className="mt-3 text-center text-[12px] text-subtle">Ketuk tombol tengah untuk membuka atau menutup.</p>
+        <p className="mt-3 text-center text-[12px] ink-4">Ketuk tombol tengah untuk membuka atau menutup.</p>
       </Card>
 
       <SectionTitle>Tren kehadiran</SectionTitle>
       <Card className="!p-0">
         <div className="flex items-end justify-between px-5 pt-5">
           <div>
-            <p className="text-[13px] text-muted">Rata-rata kehadiran</p>
-            <p className="font-display text-[34px] font-semibold leading-tight tabular">
+            <p className="text-[13px] ink-4">Rata-rata kehadiran</p>
+            <p className="hero-metric-wrap font-display text-[34px] font-semibold leading-tight ink-1 tabular">
               <Num value={avg} suffix="%" />
             </p>
           </div>
@@ -204,15 +223,15 @@ export default function GuardDashboard() {
         </div>
         <AreaChart data={trend} aspectRatio="16 / 10" yMax={100} margin={{ top: 20, right: 30, bottom: 36, left: 30 }}>
           <Grid horizontal numTicksRows={4} />
-          <Area dataKey="kehadiran" fill="#a855f7" stroke="#c026d3" fillOpacity={0.35} strokeWidth={3} />
+          <Area dataKey="kehadiran" fill="#3CC4AE" stroke="var(--accent-teal)" fillOpacity={0.32} strokeWidth={3} />
           <XAxis numTicks={4} />
-          <ChartTooltip rows={(p) => [{ color: "#c026d3", label: "Kehadiran", value: `${p.kehadiran}%` }]} />
+          <ChartTooltip rows={(p) => [{ color: "#2dd4bf", label: "Kehadiran", value: `${p.kehadiran}%` }]} />
         </AreaChart>
       </Card>
 
       <SectionTitle
         action={
-          <motion.button whileTap={{ scale: 0.94 }} onClick={() => nav("/penjaga/kehadiran")} className="soft-sm flex h-9 items-center gap-1 rounded-full px-3.5 text-[13px] font-semibold text-primary">
+          <motion.button data-wave-sync="" whileTap={{ scale: 0.94 }} onClick={() => nav("/penjaga/kehadiran")} className="micro-glass flex h-9 items-center gap-1 rounded-full px-3.5 text-[13px] font-semibold ink-teal">
             Semua <ChevronRight className="size-4" aria-hidden />
           </motion.button>
         }
@@ -223,11 +242,11 @@ export default function GuardDashboard() {
         {recentRecords.map((a) => {
           const mLabel = fmtMethodLabel(a.method);
           return (
-            <Item key={a.id} className="soft flex items-center gap-3.5 rounded-[26px] p-3 pr-4">
+            <Item key={a.id} data-glass="card" data-radius="24" data-wave-sync="" className="glass flex items-center gap-3.5 rounded-[24px] p-3 pr-4">
               <Avatar name={a.residentName} size={46} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-display text-[15px] font-semibold">{a.residentName}</p>
-                <p className="truncate font-display text-[12px] text-muted tabular">
+                <p className="truncate font-display text-[15px] font-semibold ink-1">{a.residentName}</p>
+                <p className="truncate font-display text-[12px] ink-4 tabular">
                   {toWitaTime(a.recordedAt)} WITA · {a.residentNim}
                 </p>
               </div>

@@ -20,7 +20,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/reports")
-@PreAuthorize("hasAnyRole('ADMIN', 'MONITOR', 'VILLAGE_DEAN')")
+@PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
 @Tag(name = "08. Reports, CSV Export & Audit/System Logs",
         description = "Rekap presensi per periode, export CSV lengkap (J-08), audit logs (S-07, K-03), attendance validation logs, dan riwayat perubahan data")
 public class ReportController {
@@ -46,15 +46,20 @@ public class ReportController {
     }
 
     @GetMapping(value = "/attendance/export-csv", produces = "text/csv")
-    @Operation(summary = "Export laporan rekap presensi ke file CSV dengan seluruh kolom lengkap (J-08)")
+    @Operation(summary = "Export laporan rekap presensi ke file CSV terstruktur & lengkap (J-08)")
     public ResponseEntity<byte[]> exportAttendanceCsv(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
             @RequestParam(required = false) UUID sessionId,
-            @RequestParam(required = false) AttendanceStatus status
+            @RequestParam(required = false) AttendanceStatus status,
+            @RequestParam(defaultValue = "structured") String format,
+            @RequestParam(defaultValue = ";") String sep
     ) {
-        String csvContent = reportService.exportAttendanceReportCsv(from, to, sessionId, status);
-        byte[] bytes = csvContent.getBytes(StandardCharsets.UTF_8);
+        char delimiter = ",".equals(sep) ? ',' : ';';
+        String csvContent = "raw".equalsIgnoreCase(format)
+                ? reportService.exportAttendanceReportCsv(from, to, sessionId, status)
+                : reportService.exportStructuredAttendanceReportCsv(from, to, sessionId, status, delimiter);
+        byte[] bytes = ("\uFEFF" + csvContent).getBytes(StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"rekap_presensi_asrama.csv\"")
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))

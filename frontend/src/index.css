@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.theme-dark:not(.wave-animating), .theme-dark:not(.wave-animating) *, .is-dark-zone, .is-dark-zone *));
 
 /* ==========================================================================
    Presensi Asrama — "Night & Soft" design system
@@ -30,11 +31,11 @@
   --color-night-muted: #a9a7d6;
 
   /* accent */
-  --color-primary: #6d28d9;
-  --color-primary-strong: #5b21b6;
-  --color-primary-soft: #ece4fd;
-  --color-magenta: #c026d3;
-  --color-secondary: #7c83f7; /* periwinkle */
+  --color-primary: #0E8F7E;
+  --color-primary-strong: #0A5C51;
+  --color-primary-soft: #D5F0EA;
+  --color-magenta: #0E8F7E;
+  --color-secondary: #3CC4AE; /* aqua-mint highlight */
   --color-periwinkle: #7c83f7;
   --color-lavender: #b8b5f5;
   --color-amber: #f5a524;
@@ -67,11 +68,11 @@
 :root {
   --foreground: #1a1838;
   --background: #e6e7f1;
-  --primary: #6d28d9;
-  --secondary: #7c83f7;
+  --primary: #0E8F7E;
+  --secondary: #3CC4AE;
   --destructive: #c2264f;
 
-  --grad-accent: linear-gradient(115deg, #c026d3 0%, #7c3aed 48%, #2e1a7a 100%);
+  --grad-accent: linear-gradient(115deg, #3CC4AE 0%, #0E8F7E 46%, #0A5C51 100%);
   --grad-night: linear-gradient(165deg, #2c2971 0%, #1d1b46 55%, #141236 100%);
 
   /* soft shadows — light from top-left */
@@ -83,31 +84,31 @@
   --chart-foreground: #1a1838;
   --chart-foreground-muted: #6b6f8f;
   --chart-label: #6b6f8f;
-  --chart-line-primary: #9333ea;
-  --chart-line-secondary: #c026d3;
+  --chart-line-primary: #0E8F7E;
+  --chart-line-secondary: #3CC4AE;
   --chart-crosshair: #b8b5f5;
   --chart-grid: #d3d5e7;
-  --chart-indicator-color: #7c3aed;
-  --chart-indicator-secondary-color: #c026d3;
+  --chart-indicator-color: #0E8F7E;
+  --chart-indicator-secondary-color: #3CC4AE;
   --chart-marker-background: #eeeff7;
   --chart-marker-border: #c6c9de;
   --chart-marker-foreground: #1a1838;
   --chart-marker-badge-background: #1d1b46;
   --chart-marker-badge-foreground: #ffffff;
-  --chart-segment-background: #ece4fd;
-  --chart-segment-line: #7c3aed;
+  --chart-segment-background: #D5F0EA;
+  --chart-segment-line: #0E8F7E;
 }
 
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
     background: var(--color-background);
-    scroll-behavior: smooth;
+    overflow-x: clip;
   }
   body {
     @apply font-sans text-foreground antialiased;
     min-height: 100dvh;
-    overflow-x: hidden;
+    overflow-x: clip;
     font-size: 15px;
     line-height: 1.5;
   }
@@ -127,7 +128,7 @@
     cursor: pointer;
   }
   :focus-visible {
-    outline: 2.5px solid #7c3aed;
+    outline: 2.5px solid #0E8F7E;
     outline-offset: 3px;
     border-radius: 14px;
   }
@@ -137,22 +138,25 @@
     font: inherit;
   }
   ::selection {
-    background: #e2d4fb;
+    background: #D5F0EA;
   }
 }
 
-/* ---------- Light zone surfaces ---------- */
+/* ---------- Light zone surfaces (var-backed adaptive liquid glass) ---------- */
 @utility soft {
-  background: linear-gradient(145deg, #f3f4fb, #e8e9f3);
+  background: var(--soft-bg);
   box-shadow: var(--sh-raise);
+  color: var(--ink-2);
 }
 @utility soft-sm {
-  background: linear-gradient(145deg, #f3f4fb, #e8e9f3);
+  background: var(--soft-sm-bg);
   box-shadow: var(--sh-raise-sm);
+  color: var(--ink-2);
 }
 @utility soft-inset {
-  background: #e4e5f0;
+  background: var(--soft-inset-bg);
   box-shadow: var(--sh-inset);
+  color: var(--color-foreground);
 }
 
 /* ---------- Night zone ---------- */
@@ -180,7 +184,9 @@
 @utility grad-accent {
   color: #fff;
   background: var(--grad-accent);
-  box-shadow: 0 12px 24px -12px rgba(124, 58, 237, 0.75);
+  box-shadow:
+    0 12px 24px -10px rgba(10, 92, 81, 0.72),
+    inset 0 1.5px 0 rgba(213, 240, 234, 0.42);
 }
 @utility grad-text {
   background: var(--grad-accent);
@@ -189,14 +195,16 @@
   color: transparent;
 }
 
-/* ---------- Legacy names → new system (keeps every page consistent) ---------- */
+/* ---------- Legacy names → adaptive var-backed liquid glass ---------- */
 @utility glass {
-  background: linear-gradient(145deg, #f3f4fb, #e8e9f3);
+  background: var(--soft-bg);
   box-shadow: var(--sh-raise);
+  color: var(--ink-2);
 }
 @utility glass-soft {
-  background: #e4e5f0;
+  background: var(--soft-inset-bg);
   box-shadow: var(--sh-inset);
+  color: var(--color-foreground);
 }
 @utility glass-navy {
   color: var(--color-night-ink);
@@ -210,7 +218,9 @@
 @utility btn-primary {
   color: #fff;
   background: var(--grad-accent);
-  box-shadow: 0 12px 24px -12px rgba(124, 58, 237, 0.75);
+  box-shadow:
+    0 12px 24px -10px rgba(10, 92, 81, 0.72),
+    inset 0 1.5px 0 rgba(213, 240, 234, 0.42);
 }
 
 @utility tabular {
@@ -314,4 +324,1087 @@
 }
 .float-y {
   animation: float-y 5s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   Minimalist Real Liquid Glass Sidebar & Drawer Surfaces
+   ========================================================================== */
+.lg-bg-stage {
+  background-color: #181844;
+  background-image:
+    linear-gradient(
+      108deg,
+      rgba(22, 22, 68, 0.42) 0%,
+      rgba(22, 22, 68, 0.12) 56%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    url("/sidebar-liquid-bg.jpg");
+  background-size: 100% 100%, 165% 114%;
+  background-position: center, 34% center;
+  background-repeat: no-repeat;
+  animation: lg-stage-breathe 14s ease-in-out infinite alternate;
+  will-change: background-position, transform;
+}
+
+.lg-bg-stage.is-rail {
+  background-size: 100% 100%, 260% 114%;
+  background-position: center, 38% center;
+}
+
+.lg-bg-stage.is-mobile {
+  background-size: 100% 100%, 180% 114%;
+  background-position: center, 36% center;
+}
+
+/* Flowing diagonal satin light waves layered smoothly over the current sidebar */
+.lg-silk-wave {
+  position: absolute;
+  inset: -35%;
+  pointer-events: none;
+  background:
+    radial-gradient(65% 24% at 45% 28%, rgba(255, 255, 255, 0.24) 0%, rgba(184, 181, 245, 0.12) 45%, transparent 72%),
+    radial-gradient(75% 26% at 58% 58%, rgba(165, 180, 252, 0.28) 0%, rgba(124, 131, 247, 0.14) 48%, transparent 74%),
+    radial-gradient(70% 22% at 42% 82%, rgba(213, 240, 234, 0.20) 0%, rgba(60, 196, 174, 0.08) 45%, transparent 72%);
+  filter: blur(18px);
+  mix-blend-mode: screen;
+  animation: lg-silk-flow 10s ease-in-out infinite alternate;
+  will-change: transform, opacity;
+}
+
+@keyframes lg-stage-breathe {
+  0% {
+    background-position: center, 28% 42%;
+    transform: scale(1);
+  }
+  50% {
+    background-position: center, 44% 56%;
+    transform: scale(1.03);
+  }
+  100% {
+    background-position: center, 32% 48%;
+    transform: scale(1.015);
+  }
+}
+
+@keyframes lg-silk-flow {
+  0% {
+    transform: translate3d(-6%, -5%, 0) rotate(-6deg) scale(1);
+    opacity: 0.72;
+  }
+  50% {
+    transform: translate3d(5%, 4%, 0) rotate(4deg) scale(1.06);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate3d(-3%, 7%, 0) rotate(-3deg) scale(1.02);
+    opacity: 0.78;
+  }
+}
+
+.lg-sidebar-shell {
+  background: transparent;
+  box-shadow:
+    0 28px 58px -18px rgba(18, 18, 56, 0.48),
+    0 6px 18px -6px rgba(18, 18, 56, 0.22);
+}
+
+.lg-drawer-shell {
+  background: transparent;
+  box-shadow:
+    22px 14px 56px -12px rgba(12, 12, 46, 0.52),
+    0 8px 22px -6px rgba(18, 18, 56, 0.24);
+}
+
+.lg-glass-layer {
+  background: linear-gradient(
+    150deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(24, 24, 68, 0.16) 48%,
+    rgba(255, 255, 255, 0.10) 100%
+  );
+  -webkit-backdrop-filter: blur(14px) saturate(140%) brightness(1.03);
+  backdrop-filter: blur(14px) saturate(140%) brightness(1.03);
+  box-shadow:
+    inset 0 0.5px 1px rgba(255, 255, 255, 0.35),
+    inset 0 -18px 34px rgba(18, 18, 56, 0.22);
+}
+
+.lg-glass-layer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(190px 100px at 85% 6%, rgba(255, 255, 255, 0.45) 0%, rgba(235, 238, 255, 0.14) 45%, transparent 74%),
+    radial-gradient(180px 120px at 14% 95%, rgba(255, 255, 255, 0.16) 0%, transparent 70%);
+  mix-blend-mode: screen;
+}
+
+.lg-glass-layer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 0.65px;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.08) 35%,
+    rgba(255, 255, 255, 0.02) 65%,
+    rgba(255, 255, 255, 0.22) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.lg-brand-orb {
+  background: radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.45), rgba(24, 24, 68, 0.28) 72%);
+  box-shadow:
+    inset 0 1.2px 1px rgba(255, 255, 255, 0.8),
+    inset 0 -1.5px 4px rgba(255, 255, 255, 0.25),
+    0 8px 18px -6px rgba(12, 12, 42, 0.45);
+}
+
+.lg-collapse-orb {
+  background: rgba(24, 24, 68, 0.26);
+  box-shadow: inset 0 1px 0.8px rgba(255, 255, 255, 0.48);
+}
+
+.lg-user-glass {
+  background: linear-gradient(135deg, rgba(24, 24, 68, 0.18) 0%, rgba(255, 255, 255, 0.04) 100%);
+  box-shadow:
+    inset 0 0.5px 0.8px rgba(255, 255, 255, 0.16),
+    0 8px 18px -12px rgba(12, 12, 44, 0.32);
+}
+
+.lg-user-glass.is-active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 0.6px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.04) 52%, rgba(255, 255, 255, 0.2));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.lg-jewel-cta {
+  background: linear-gradient(
+    130deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(28, 28, 78, 0.22) 54%,
+    rgba(255, 255, 255, 0.10) 100%
+  );
+  -webkit-backdrop-filter: blur(8px) saturate(140%) brightness(1.04);
+  backdrop-filter: blur(8px) saturate(140%) brightness(1.04);
+  box-shadow:
+    inset 0 0.5px 1px rgba(255, 255, 255, 0.16),
+    0 10px 20px -12px rgba(12, 12, 44, 0.42);
+}
+
+.lg-jewel-cta::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 0.6px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.03) 50%, rgba(255, 255, 255, 0.16));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.lg-pill-active {
+  isolation: isolate;
+  background: linear-gradient(
+    140deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.008) 48%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  -webkit-backdrop-filter: blur(8px) saturate(145%) brightness(1.06);
+  backdrop-filter: blur(8px) saturate(145%) brightness(1.06);
+  box-shadow:
+    0 10px 20px -11px rgba(8, 10, 38, 0.50),
+    inset 0 0.5px 1.2px rgba(255, 255, 255, 0.14),
+    inset 0 0 8px rgba(255, 255, 255, 0.03);
+}
+
+.lg-pill-active.is-dock {
+  -webkit-backdrop-filter: blur(8px) saturate(145%) brightness(1.06);
+  backdrop-filter: blur(8px) saturate(145%) brightness(1.06);
+}
+
+.lg-pill-active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 0.6px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.06) 30%,
+    rgba(255, 255, 255, 0.02) 52%,
+    rgba(220, 232, 255, 0.05) 74%,
+    rgba(255, 255, 255, 0.18) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.lg-footer-pill {
+  background: linear-gradient(135deg, rgba(24, 24, 68, 0.42), rgba(24, 24, 68, 0.22));
+  box-shadow: inset 0 1px 0.8px rgba(255, 255, 255, 0.42);
+}
+
+.lg-pill-glass {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.22), rgba(24, 24, 68, 0.44));
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+  box-shadow:
+    inset 0 0.8px 0.8px rgba(255, 255, 255, 0.36),
+    0 10px 24px -10px rgba(12, 12, 46, 0.48);
+}
+
+.lg-pill-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 0.6px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.04) 52%, rgba(255, 255, 255, 0.2));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.lg-tooltip-pill {
+  background: linear-gradient(145deg, rgba(26, 26, 72, 0.88), rgba(16, 16, 48, 0.94));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 14px 28px -8px rgba(10, 8, 40, 0.56),
+    inset 0 0.8px 0 rgba(255, 255, 255, 0.26);
+}
+
+.lg-edge-handle {
+  background: linear-gradient(180deg, rgba(32, 32, 86, 0.52), rgba(22, 22, 64, 0.72));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    inset -1px 0 1px rgba(255, 255, 255, 0.34),
+    4px 0 18px rgba(18, 18, 56, 0.28);
+}
+
+.lg-nav-shadow {
+  text-shadow: 0 1px 8px rgba(18, 18, 56, 0.45);
+}
+
+.dark-autofill:-webkit-autofill,
+.dark-autofill:-webkit-autofill:hover,
+.dark-autofill:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff;
+  -webkit-box-shadow: 0 0 0px 1000px rgba(14, 13, 36, 0.9) inset;
+  transition: background-color 9999s ease-out 0s;
+  caret-color: #ffffff;
+}
+
+/* Transparent optical Liquid Glass pill with glossy curved bezel refraction */
+.lg-hero-liquid-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.03) 45%,
+    rgba(255, 255, 255, 0.015) 68%,
+    rgba(255, 255, 255, 0.12) 100%
+  );
+  -webkit-backdrop-filter: blur(10px) saturate(165%) brightness(1.12);
+  backdrop-filter: blur(10px) saturate(165%) brightness(1.12);
+  box-shadow:
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.72),
+    inset 0 -2px 5px rgba(255, 255, 255, 0.24),
+    inset 1.5px 0 3px rgba(255, 255, 255, 0.22),
+    inset -1.5px 0 3px rgba(255, 255, 255, 0.22),
+    0 16px 36px -10px rgba(0, 0, 0, 0.65);
+  transition: transform 0.22s var(--ease-out-expo), box-shadow 0.25s ease, background 0.25s ease;
+}
+
+.lg-hero-liquid-btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.1px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(255, 255, 255, 0.22) 28%,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 255, 255, 0.28) 74%,
+    rgba(255, 255, 255, 0.80) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.lg-hero-liquid-btn::after {
+  content: "";
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 2px;
+  height: 42%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+
+.lg-hero-liquid-btn:hover {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.06) 45%,
+    rgba(255, 255, 255, 0.03) 68%,
+    rgba(255, 255, 255, 0.18) 100%
+  );
+  box-shadow:
+    inset 0 1.5px 2px rgba(255, 255, 255, 0.88),
+    inset 0 -2px 6px rgba(255, 255, 255, 0.34),
+    0 20px 42px -10px rgba(0, 0, 0, 0.72),
+    0 0 24px -4px rgba(165, 180, 252, 0.35);
+}
+
+/* ==========================================================================
+   Unified Optical Liquid Glass Stage + Light/Dark Ocean Wave Design System
+   ========================================================================== */
+:root {
+  --app-canvas-bg: #eef2f7;
+  --ink-1: #020617;
+  --ink-2: #0f172a;
+  --ink-3: #334155;
+  --ink-4: #64748b;
+  --ink-5: #94a3b8;
+  --accent-teal: #0e8f7e;
+  --t-neutral: #0f172a;
+  --t-sky: #0284c7;
+  --t-indigo: #4f46e5;
+  --icon-well: rgba(255, 255, 255, 0.84);
+  --icon-well-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 10px -4px rgba(15, 23, 42, 0.14);
+  --micro-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.56), rgba(232, 240, 252, 0.28));
+  --micro-shadow:
+    inset 0 1.2px 1px rgba(255, 255, 255, 0.96),
+    inset 0 -1.5px 2px rgba(15, 23, 42, 0.10),
+    0 5px 14px -4px rgba(15, 23, 42, 0.14);
+  --ring-track: rgba(15, 23, 42, 0.12);
+  --ring-inner-bg: linear-gradient(145deg, #f6f6fc, #e3e4ef);
+  --metric-shadow: 0 1px 10px rgba(255, 255, 255, 0.95);
+  --glass-fallback-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(241, 245, 250, 0.70));
+  --glass-fallback-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.92), 0 14px 30px -16px rgba(15, 23, 42, 0.14);
+  --soft-bg: linear-gradient(142deg, rgba(255, 255, 255, 0.30) 0%, rgba(242, 247, 255, 0.10) 48%, rgba(230, 240, 254, 0.24) 100%);
+  --soft-sm-bg: linear-gradient(142deg, rgba(255, 255, 255, 0.54), rgba(235, 242, 252, 0.28));
+  --soft-inset-bg: linear-gradient(160deg, rgba(218, 228, 244, 0.34), rgba(240, 246, 255, 0.24));
+}
+
+html.theme-dark:not(.wave-animating) {
+  color-scheme: dark;
+  --app-canvas-bg: #060d1c;
+  --foreground: #f1f5f9;
+  --background: #060d1c;
+  --color-background: #060d1c;
+  --color-surface: rgba(13, 22, 42, 0.88);
+  --color-surface-2: rgba(15, 25, 48, 0.84);
+  --color-raise: rgba(20, 32, 58, 0.92);
+  --color-foreground: #f1f5f9;
+  --color-muted: #94a3b8;
+  --color-subtle: #7e91ab;
+  --color-line: rgba(148, 163, 184, 0.20);
+  --color-line-strong: rgba(148, 163, 184, 0.34);
+  --color-popover: #0f172a;
+  --color-primary: #2dd4bf;
+  --color-primary-soft: rgba(45, 212, 191, 0.16);
+  --color-success: #34d399;
+  --color-success-soft: rgba(16, 185, 129, 0.16);
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgba(245, 158, 11, 0.16);
+  --color-danger: #fb7185;
+  --color-danger-soft: rgba(244, 63, 94, 0.18);
+  --sh-raise:
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.44),
+    inset 0 -1.5px 2px rgba(186, 230, 253, 0.28),
+    inset 0 5px 12px -2px rgba(0, 0, 0, 0.70),
+    0 18px 40px -14px rgba(0, 0, 0, 0.72);
+  --sh-raise-sm:
+    inset 0 1px 1px rgba(224, 242, 254, 0.32),
+    inset 0 -1px 1.5px rgba(0, 0, 0, 0.56),
+    0 8px 18px -6px rgba(0, 0, 0, 0.52);
+  --sh-inset:
+    inset 0 2px 7px rgba(0, 0, 0, 0.62),
+    inset 0 -1px 1px rgba(186, 230, 253, 0.22);
+  --ink-1: #f8fafc;
+  --ink-2: #f1f5f9;
+  --ink-3: #cbd5e1;
+  --ink-4: #94a3b8;
+  --ink-5: #7e91ab;
+  --accent-teal: #2dd4bf;
+  --t-neutral: #e2e8f0;
+  --t-sky: #38bdf8;
+  --t-indigo: #818cf8;
+  --icon-well: rgba(13, 23, 42, 0.64);
+  --icon-well-shadow: inset 0 1px 1px rgba(186, 230, 253, 0.18), 0 4px 12px -4px rgba(0, 0, 0, 0.55);
+  --micro-bg: linear-gradient(145deg, rgba(22, 36, 64, 0.52), rgba(8, 15, 30, 0.38));
+  --micro-shadow:
+    inset 0 1.2px 1px rgba(224, 242, 254, 0.34),
+    inset 0 -1.5px 2px rgba(0, 0, 0, 0.58),
+    0 6px 14px -4px rgba(0, 0, 0, 0.48);
+  --ring-track: rgba(255, 255, 255, 0.14);
+  --ring-inner-bg: radial-gradient(circle at 35% 30%, rgba(20, 34, 62, 0.92), rgba(10, 17, 34, 0.96));
+  --metric-shadow: 0 2px 14px rgba(4, 9, 20, 0.92), 0 0 10px rgba(45, 212, 191, 0.18);
+  --glass-fallback-bg: linear-gradient(145deg, rgba(16, 26, 46, 0.86), rgba(8, 14, 28, 0.74));
+  --glass-fallback-shadow: inset 0 1px 1px rgba(186, 230, 253, 0.2), 0 14px 30px -16px rgba(0, 0, 0, 0.65);
+  --soft-bg: linear-gradient(142deg, rgba(18, 32, 60, 0.38) 0%, rgba(6, 12, 26, 0.20) 48%, rgba(12, 22, 46, 0.34) 100%);
+  --soft-sm-bg: linear-gradient(142deg, rgba(22, 36, 64, 0.50), rgba(9, 16, 32, 0.36));
+  --soft-inset-bg: linear-gradient(160deg, rgba(5, 10, 22, 0.52), rgba(12, 22, 44, 0.34));
+  --chart-background: transparent;
+  --chart-foreground: #f8fafc;
+  --chart-foreground-muted: #94a3b8;
+  --chart-label: #7e91ab;
+  --chart-line-primary: #2dd4bf;
+  --chart-line-secondary: #38bdf8;
+  --chart-crosshair: #2dd4bf;
+  --chart-grid: rgba(226, 232, 240, 0.12);
+  --chart-indicator-color: #2dd4bf;
+  --chart-indicator-secondary-color: #38bdf8;
+  --chart-marker-background: #0f172a;
+  --chart-marker-border: #2dd4bf;
+  --chart-marker-foreground: #f8fafc;
+  --chart-marker-badge-background: rgba(15, 25, 46, 0.92);
+  --chart-marker-badge-foreground: #f8fafc;
+  --chart-segment-background: rgba(45, 212, 191, 0.18);
+  --chart-segment-line: rgba(45, 212, 191, 0.55);
+}
+
+html,
+body {
+  background-color: var(--app-canvas-bg);
+  color: var(--color-foreground);
+  transition: background-color 1.4s ease, color 0.3s ease;
+}
+
+/* Individual Element Ocean-Wave Cascade ([data-glass], [data-wave-sync], .glass, .soft) */
+[data-glass],
+[data-wave-sync],
+.glass,
+.soft:not([data-glass]),
+.soft-sm:not([data-glass]),
+.soft-inset,
+.glass-soft,
+.micro-glass {
+  --ink-1: #020617;
+  --ink-2: #0f172a;
+  --ink-3: #334155;
+  --ink-4: #64748b;
+  --ink-5: #94a3b8;
+  --accent-teal: #0e8f7e;
+  --t-neutral: #0f172a;
+  --t-sky: #0284c7;
+  --t-indigo: #4f46e5;
+  --icon-well: rgba(255, 255, 255, 0.84);
+  --icon-well-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 10px -4px rgba(15, 23, 42, 0.14);
+  --micro-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.56), rgba(232, 240, 252, 0.28));
+  --micro-shadow:
+    inset 0 1.2px 1px rgba(255, 255, 255, 0.96),
+    inset 0 -1.5px 2px rgba(15, 23, 42, 0.10),
+    0 5px 14px -4px rgba(15, 23, 42, 0.14);
+  --ring-track: rgba(15, 23, 42, 0.12);
+  --ring-inner-bg: linear-gradient(145deg, #f6f6fc, #e3e4ef);
+  --metric-shadow: 0 1px 10px rgba(255, 255, 255, 0.95);
+  --color-surface: #eeeff7;
+  --color-surface-2: #e9eaf4;
+  --color-raise: #f7f7fc;
+  --color-foreground: #0f172a;
+  --color-muted: #475569;
+  --color-subtle: #64748b;
+  --color-line: #d9dbea;
+  --color-line-strong: #c6c9de;
+  --color-primary: #0e8f7e;
+  --color-primary-soft: #D5F0EA;
+  --color-success: #0f8a5f;
+  --color-success-soft: #dcf3e9;
+  --color-warning: #9a5b00;
+  --color-warning-soft: #fdeed3;
+  --color-danger: #c2264f;
+  --color-danger-soft: #fbe3ea;
+  --sh-raise: -7px -7px 16px rgba(255, 255, 255, 0.9), 9px 11px 22px rgba(86, 90, 150, 0.22);
+  --sh-raise-sm: -4px -4px 10px rgba(255, 255, 255, 0.9), 5px 6px 12px rgba(86, 90, 150, 0.2);
+  --sh-inset: inset 4px 5px 10px rgba(86, 90, 150, 0.2), inset -5px -5px 10px rgba(255, 255, 255, 0.85);
+  --soft-bg: linear-gradient(142deg, rgba(255, 255, 255, 0.30) 0%, rgba(242, 247, 255, 0.10) 48%, rgba(230, 240, 254, 0.24) 100%);
+  --soft-sm-bg: linear-gradient(142deg, rgba(255, 255, 255, 0.54), rgba(235, 242, 252, 0.28));
+  --soft-inset-bg: linear-gradient(160deg, rgba(218, 228, 244, 0.34), rgba(240, 246, 255, 0.24));
+  --chart-grid: rgba(15, 23, 42, 0.08);
+  --chart-foreground: #0f172a;
+  --chart-foreground-muted: #64748b;
+  --chart-label: #64748b;
+  --chart-line-primary: #0e8f7e;
+}
+
+[data-glass],
+.glass:not(.grad-accent),
+.soft:not(.grad-accent),
+.soft-sm:not([data-glass]),
+.soft-inset,
+.glass-soft {
+  color: var(--ink-2);
+}
+
+.is-dark-zone,
+[data-glass].is-dark-zone,
+[data-wave-sync].is-dark-zone,
+.glass.is-dark-zone,
+.soft.is-dark-zone,
+.soft-sm.is-dark-zone,
+.soft-inset.is-dark-zone,
+.glass-soft.is-dark-zone,
+.micro-glass.is-dark-zone,
+html.theme-dark:not(.wave-animating) [data-glass],
+html.theme-dark:not(.wave-animating) [data-wave-sync],
+html.theme-dark:not(.wave-animating) .glass,
+html.theme-dark:not(.wave-animating) .soft,
+html.theme-dark:not(.wave-animating) .soft-sm,
+html.theme-dark:not(.wave-animating) .soft-inset,
+html.theme-dark:not(.wave-animating) .glass-soft,
+html.theme-dark:not(.wave-animating) .micro-glass {
+  --ink-1: #f8fafc;
+  --ink-2: #f1f5f9;
+  --ink-3: #cbd5e1;
+  --ink-4: #94a3b8;
+  --ink-5: #7e91ab;
+  --accent-teal: #2dd4bf;
+  --t-neutral: #e2e8f0;
+  --t-sky: #38bdf8;
+  --t-indigo: #818cf8;
+  --icon-well: rgba(13, 23, 42, 0.64);
+  --icon-well-shadow: inset 0 1px 1px rgba(186, 230, 253, 0.18), 0 4px 12px -4px rgba(0, 0, 0, 0.55);
+  --micro-bg: linear-gradient(145deg, rgba(22, 36, 64, 0.52), rgba(8, 15, 30, 0.38));
+  --micro-shadow:
+    inset 0 1.2px 1px rgba(224, 242, 254, 0.34),
+    inset 0 -1.5px 2px rgba(0, 0, 0, 0.58),
+    0 6px 14px -4px rgba(0, 0, 0, 0.48);
+  --ring-track: rgba(255, 255, 255, 0.14);
+  --ring-inner-bg: radial-gradient(circle at 35% 30%, rgba(20, 34, 62, 0.92), rgba(10, 17, 34, 0.96));
+  --metric-shadow: 0 2px 14px rgba(4, 9, 20, 0.92), 0 0 10px rgba(45, 212, 191, 0.18);
+  --color-surface: rgba(13, 22, 42, 0.88);
+  --color-surface-2: rgba(15, 25, 48, 0.84);
+  --color-raise: rgba(20, 32, 58, 0.92);
+  --color-foreground: #f8fafc;
+  --color-muted: #94a3b8;
+  --color-subtle: #7e91ab;
+  --color-line: rgba(148, 163, 184, 0.20);
+  --color-line-strong: rgba(148, 163, 184, 0.34);
+  --color-primary: #2dd4bf;
+  --color-primary-soft: rgba(45, 212, 191, 0.16);
+  --color-success: #34d399;
+  --color-success-soft: rgba(16, 185, 129, 0.16);
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgba(245, 158, 11, 0.16);
+  --color-danger: #fb7185;
+  --color-danger-soft: rgba(244, 63, 94, 0.18);
+  --sh-raise:
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.44),
+    inset 0 -1.5px 2px rgba(186, 230, 253, 0.28),
+    inset 0 5px 12px -2px rgba(0, 0, 0, 0.70),
+    0 18px 40px -14px rgba(0, 0, 0, 0.72);
+  --sh-raise-sm:
+    inset 0 1px 1px rgba(224, 242, 254, 0.32),
+    inset 0 -1px 1.5px rgba(0, 0, 0, 0.56),
+    0 8px 18px -6px rgba(0, 0, 0, 0.52);
+  --sh-inset:
+    inset 0 2px 7px rgba(0, 0, 0, 0.62),
+    inset 0 -1px 1px rgba(186, 230, 253, 0.22);
+  --soft-bg: linear-gradient(142deg, rgba(18, 32, 60, 0.38) 0%, rgba(6, 12, 26, 0.20) 48%, rgba(12, 22, 46, 0.34) 100%);
+  --soft-sm-bg: linear-gradient(142deg, rgba(22, 36, 64, 0.50), rgba(9, 16, 32, 0.36));
+  --soft-inset-bg: linear-gradient(160deg, rgba(5, 10, 22, 0.52), rgba(12, 22, 44, 0.34));
+  --chart-grid: rgba(226, 232, 240, 0.12);
+  --chart-foreground: #f8fafc;
+  --chart-foreground-muted: #94a3b8;
+  --chart-label: #7e91ab;
+  --chart-line-primary: #2dd4bf;
+}
+
+/* Smooth wave transition interpolation while the ocean shader crosses containers */
+html.wave-animating [data-glass],
+html.wave-animating [data-wave-sync],
+html.wave-animating .glass,
+html.wave-animating .soft,
+html.wave-animating .soft-sm,
+html.wave-animating .soft-inset,
+html.wave-animating .glass-soft,
+html.wave-animating .micro-glass,
+html.wave-animating [class*="dark:"] {
+  transition:
+    background-color 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.36s ease,
+    box-shadow 0.42s ease,
+    color 0.32s ease;
+}
+
+/* ==========================================================================
+   Unified Optical Liquid Glass Containers ([data-glass], .glass, .soft)
+   GPU-composited glass base for touch/mobile + SDF refraction (#lg-card) on desktop
+   ========================================================================== */
+[data-glass],
+.glass:not(.grad-accent):not(.glass-navy),
+.soft:not([data-glass]):not(.grad-accent) {
+  isolation: isolate;
+  contain: layout style;
+  -webkit-backdrop-filter: blur(12px) saturate(185%) contrast(1.06);
+  backdrop-filter: blur(12px) saturate(185%) contrast(1.06);
+  border-color: transparent !important;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+[data-glass]:not(.sticky):not(.fixed):not(.absolute),
+.glass:not(.sticky):not(.fixed):not(.absolute),
+.soft:not([data-glass]):not(.sticky):not(.fixed):not(.absolute) {
+  position: relative;
+}
+
+html:not(.gl-fallback) [data-glass]:not([class*="!bg-"]),
+html:not(.gl-fallback) .glass:not(.grad-accent):not(.glass-navy):not([class*="!bg-"]),
+html:not(.gl-fallback) .soft:not([data-glass]):not(.grad-accent):not([class*="!bg-"]) {
+  background-color: rgba(244, 249, 255, 0.08) !important;
+  background-image: linear-gradient(
+    142deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0) 46%,
+    rgba(255, 255, 255, 0.10) 100%
+  ) !important;
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.98),
+    inset 0 -1.5px 2px rgba(255, 255, 255, 0.86),
+    inset 0 5px 12px -3px rgba(15, 23, 42, 0.14),
+    inset 0 -6px 14px -3px rgba(15, 23, 42, 0.16),
+    inset 2px 0 3px rgba(255, 255, 255, 0.72),
+    inset -2px 0 3px rgba(255, 255, 255, 0.58),
+    0 16px 36px -16px rgba(15, 23, 42, 0.22),
+    0 3px 10px -3px rgba(15, 23, 42, 0.08) !important;
+}
+
+html:not(.gl-fallback) [data-glass="slab"] {
+  background-color: rgba(242, 247, 255, 0.06) !important;
+}
+
+html:not(.gl-fallback) [data-glass].is-dark-zone:not([class*="!bg-"]),
+html:not(.gl-fallback) .glass.is-dark-zone:not(.grad-accent):not(.glass-navy):not([class*="!bg-"]),
+html:not(.gl-fallback) .soft.is-dark-zone:not([data-glass]):not(.grad-accent):not([class*="!bg-"]),
+html:not(.gl-fallback).theme-dark:not(.wave-animating) [data-glass]:not([class*="!bg-"]),
+html:not(.gl-fallback).theme-dark:not(.wave-animating) .glass:not(.grad-accent):not(.glass-navy):not([class*="!bg-"]),
+html:not(.gl-fallback).theme-dark:not(.wave-animating) .soft:not([data-glass]):not(.grad-accent):not([class*="!bg-"]) {
+  background-color: rgba(10, 19, 39, 0.18) !important;
+  background-image: linear-gradient(
+    142deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0) 46%,
+    rgba(186, 230, 253, 0.06) 100%
+  ) !important;
+  box-shadow:
+    inset 0 1.5px 1.5px rgba(255, 255, 255, 0.56),
+    inset 0 -1.5px 2px rgba(186, 230, 253, 0.36),
+    inset 0 6px 14px -2px rgba(0, 0, 0, 0.74),
+    inset 0 -7px 16px -2px rgba(0, 0, 0, 0.70),
+    inset 2px 0 4px rgba(186, 230, 253, 0.22),
+    inset -2px 0 4px rgba(45, 212, 191, 0.20),
+    0 20px 44px -16px rgba(0, 0, 0, 0.78),
+    0 0 24px -8px rgba(45, 212, 191, 0.18) !important;
+}
+
+html:not(.gl-fallback) [data-glass="slab"].is-dark-zone,
+html:not(.gl-fallback).theme-dark:not(.wave-animating) [data-glass="slab"] {
+  background-color: rgba(9, 18, 36, 0.15) !important;
+}
+
+/* Prismatic specular bevel ring (active on both mobile & desktop with GPU layer isolation) */
+[data-glass]::before,
+.glass:not(.grad-accent):not(.glass-navy)::before,
+.soft:not([data-glass]):not(.grad-accent)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    138deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(186, 230, 253, 0.55) 26%,
+    rgba(60, 196, 174, 0.34) 52%,
+    rgba(165, 180, 252, 0.38) 76%,
+    rgba(255, 255, 255, 0.92) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  pointer-events: none;
+  z-index: 2;
+}
+
+[data-glass].is-dark-zone::before,
+.glass.is-dark-zone:not(.grad-accent):not(.glass-navy)::before,
+.soft.is-dark-zone:not([data-glass]):not(.grad-accent)::before,
+html.theme-dark:not(.wave-animating) [data-glass]::before,
+html.theme-dark:not(.wave-animating) .glass:not(.grad-accent):not(.glass-navy)::before,
+html.theme-dark:not(.wave-animating) .soft:not([data-glass]):not(.grad-accent)::before,
+html.gl-fallback.theme-dark [data-glass]::before {
+  background: linear-gradient(
+    138deg,
+    rgba(255, 255, 255, 0.84) 0%,
+    rgba(186, 230, 253, 0.44) 28%,
+    rgba(45, 212, 191, 0.34) 56%,
+    rgba(15, 23, 42, 0.25) 78%,
+    rgba(224, 242, 254, 0.72) 100%
+  );
+}
+
+/* Curved top meniscus caustic glint (painted behind children via isolation: isolate) */
+[data-glass]::after,
+.glass:not(.grad-accent):not(.glass-navy)::after,
+.soft:not([data-glass]):not(.grad-accent)::after {
+  content: "";
+  position: absolute;
+  left: 3%;
+  right: 3%;
+  top: 2px;
+  height: 36%;
+  max-height: 54px;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.05) 55%, rgba(255, 255, 255, 0) 100%);
+  transform: translateZ(0);
+  pointer-events: none;
+  z-index: -1;
+}
+
+[data-glass].is-dark-zone::after,
+.glass.is-dark-zone:not(.grad-accent):not(.glass-navy)::after,
+.soft.is-dark-zone:not([data-glass]):not(.grad-accent)::after,
+html.theme-dark:not(.wave-animating) [data-glass]::after,
+html.theme-dark:not(.wave-animating) .glass:not(.grad-accent):not(.glass-navy)::after,
+html.theme-dark:not(.wave-animating) .soft:not([data-glass]):not(.grad-accent)::after {
+  background: linear-gradient(180deg, rgba(224, 242, 254, 0.16) 0%, rgba(186, 230, 253, 0.03) 55%, rgba(0, 0, 0, 0) 100%);
+}
+
+html.gl-fallback [data-glass],
+html.gl-fallback .glass:not(.grad-accent):not(.glass-navy),
+html.gl-fallback .soft:not([data-glass]):not(.grad-accent) {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.86), rgba(241, 245, 250, 0.72));
+  box-shadow: var(--glass-fallback-shadow);
+}
+
+html.gl-fallback [data-glass].is-dark-zone,
+html.gl-fallback.theme-dark [data-glass],
+html.gl-fallback.theme-dark .glass:not(.grad-accent):not(.glass-navy),
+html.gl-fallback.theme-dark .soft:not([data-glass]):not(.grad-accent) {
+  background: linear-gradient(145deg, rgba(16, 26, 46, 0.86), rgba(8, 14, 28, 0.74));
+  box-shadow: inset 0 1px 1px rgba(186, 230, 253, 0.2), 0 14px 30px -16px rgba(0, 0, 0, 0.65);
+}
+
+/* Micro-glass droplets, pills, badges & tiles with convex refraction */
+.micro-glass {
+  background-color: rgba(244, 248, 255, 0.44);
+  background-image: linear-gradient(145deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.02));
+  -webkit-backdrop-filter: blur(9px) saturate(180%);
+  backdrop-filter: blur(9px) saturate(180%);
+  box-shadow: var(--micro-shadow);
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  color: var(--ink-2);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transition: background-color 0.28s ease, border-color 0.28s ease, color 0.24s ease, box-shadow 0.28s ease;
+}
+
+.micro-glass.is-dark-zone,
+html.theme-dark:not(.wave-animating) .micro-glass {
+  background-color: rgba(14, 24, 46, 0.46);
+  background-image: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.01));
+  border-color: rgba(186, 230, 253, 0.26);
+}
+
+.icon-well {
+  background: var(--icon-well);
+  box-shadow: var(--icon-well-shadow);
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.hero-metric-wrap {
+  text-shadow: var(--metric-shadow);
+  transition: text-shadow 0.14s ease;
+}
+
+/* Small raised crystal surfaces */
+.soft-sm:not([data-glass]) {
+  background-color: rgba(244, 248, 255, 0.42);
+  background-image: linear-gradient(142deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.02));
+  -webkit-backdrop-filter: blur(8px) saturate(175%);
+  backdrop-filter: blur(8px) saturate(175%);
+  box-shadow: var(--sh-raise-sm);
+  border: 1px solid rgba(255, 255, 255, 0.56);
+}
+
+.soft-sm.is-dark-zone:not([data-glass]),
+html.theme-dark:not(.wave-animating) .soft-sm:not([data-glass]) {
+  background-color: rgba(14, 24, 46, 0.44);
+  background-image: linear-gradient(142deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.01));
+  border-color: rgba(186, 230, 253, 0.24);
+}
+
+/* Recessed concave Liquid Glass wells (inputs, segmented tracks, inset chips) */
+.soft-inset,
+.glass-soft {
+  background-color: rgba(220, 232, 248, 0.30);
+  background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02));
+  -webkit-backdrop-filter: blur(7px) saturate(165%);
+  backdrop-filter: blur(7px) saturate(165%);
+  box-shadow:
+    inset 0 2px 6px rgba(15, 23, 42, 0.10),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.50);
+}
+
+/* Desktop fine-pointer: enable full SVG SDF displacement refraction on glass surfaces */
+@media (hover: hover) and (pointer: fine) {
+  [data-glass],
+  .glass:not(.grad-accent):not(.glass-navy),
+  .soft:not([data-glass]):not(.grad-accent) {
+    -webkit-backdrop-filter: url(#lg-card) blur(2.5px) saturate(190%) contrast(1.06);
+    backdrop-filter: url(#lg-card) blur(2.5px) saturate(190%) contrast(1.06);
+  }
+  .micro-glass,
+  .lg-pill-glass {
+    -webkit-backdrop-filter: url(#lg-pill) blur(3px) saturate(190%);
+    backdrop-filter: url(#lg-pill) blur(3px) saturate(190%);
+  }
+  .soft-inset,
+  .glass-soft {
+    -webkit-backdrop-filter: url(#lg-inset) blur(7px) saturate(165%);
+    backdrop-filter: url(#lg-inset) blur(7px) saturate(165%);
+  }
+  .lg-glass-layer {
+    -webkit-backdrop-filter: url(#lg-sidebar) blur(14px) saturate(140%) brightness(1.03);
+    backdrop-filter: url(#lg-sidebar) blur(14px) saturate(140%) brightness(1.03);
+  }
+  .lg-jewel-cta {
+    -webkit-backdrop-filter: url(#lg-pill) saturate(140%) brightness(1.04);
+    backdrop-filter: url(#lg-pill) saturate(140%) brightness(1.04);
+  }
+  .lg-pill-active {
+    -webkit-backdrop-filter: url(#lg-pill) saturate(145%) brightness(1.06);
+    backdrop-filter: url(#lg-pill) saturate(145%) brightness(1.06);
+  }
+  .lg-pill-active.is-dock {
+    -webkit-backdrop-filter: url(#lg-dock) saturate(145%) brightness(1.06);
+    backdrop-filter: url(#lg-dock) saturate(145%) brightness(1.06);
+  }
+  .lg-edge-handle {
+    -webkit-backdrop-filter: url(#lg-pill) blur(14px);
+    backdrop-filter: url(#lg-pill) blur(14px);
+  }
+  .lg-hero-liquid-btn {
+    -webkit-backdrop-filter: url(#lg-pill) blur(10px) saturate(165%) brightness(1.12);
+    backdrop-filter: url(#lg-pill) blur(10px) saturate(165%) brightness(1.12);
+  }
+}
+
+/* Mobile / touch: preserve crystal depth & legibility without WebGL cutout lag */
+@media (hover: none), (pointer: coarse) {
+  html:not(.gl-fallback) [data-glass]:not([class*="!bg-"]),
+  html:not(.gl-fallback) .glass:not(.grad-accent):not(.glass-navy):not([class*="!bg-"]),
+  html:not(.gl-fallback) .soft:not([data-glass]):not(.grad-accent):not([class*="!bg-"]) {
+    background-color: rgba(244, 249, 255, 0.30) !important;
+    background-image: linear-gradient(
+      142deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(255, 255, 255, 0) 44%,
+      rgba(255, 255, 255, 0.12) 100%
+    ) !important;
+  }
+
+  html:not(.gl-fallback) [data-glass="slab"] {
+    background-color: rgba(242, 247, 255, 0.25) !important;
+  }
+
+  html:not(.gl-fallback) [data-glass].is-dark-zone:not([class*="!bg-"]),
+  html:not(.gl-fallback) .glass.is-dark-zone:not(.grad-accent):not(.glass-navy):not([class*="!bg-"]),
+  html:not(.gl-fallback) .soft.is-dark-zone:not([data-glass]):not(.grad-accent):not([class*="!bg-"]),
+  html:not(.gl-fallback).theme-dark:not(.wave-animating) [data-glass]:not([class*="!bg-"]),
+  html:not(.gl-fallback).theme-dark:not(.wave-animating) .glass:not(.grad-accent):not(.glass-navy):not([class*="!bg-"]),
+  html:not(.gl-fallback).theme-dark:not(.wave-animating) .soft:not([data-glass]):not(.grad-accent):not([class*="!bg-"]) {
+    background-color: rgba(10, 19, 39, 0.38) !important;
+    background-image: linear-gradient(
+      142deg,
+      rgba(255, 255, 255, 0.08) 0%,
+      rgba(255, 255, 255, 0) 46%,
+      rgba(186, 230, 253, 0.06) 100%
+    ) !important;
+  }
+
+  html:not(.gl-fallback) [data-glass="slab"].is-dark-zone,
+  html:not(.gl-fallback).theme-dark:not(.wave-animating) [data-glass="slab"] {
+    background-color: rgba(9, 18, 36, 0.32) !important;
+  }
+}
+
+.soft-inset.is-dark-zone,
+.glass-soft.is-dark-zone,
+html.theme-dark:not(.wave-animating) .soft-inset,
+html.theme-dark:not(.wave-animating) .glass-soft {
+  background-color: rgba(7, 13, 28, 0.44);
+  background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+  box-shadow:
+    inset 0 2px 8px rgba(0, 0, 0, 0.60),
+    inset 0 -1px 1px rgba(186, 230, 253, 0.24);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+/* Semantic optical ink helpers inside [data-glass] & [data-wave-sync] */
+.ink-1 { color: var(--ink-1); }
+.ink-2 { color: var(--ink-2); }
+.ink-3 { color: var(--ink-3); }
+.ink-4 { color: var(--ink-4); }
+.ink-5 { color: var(--ink-5); }
+.ink-teal { color: var(--accent-teal); }
+
+/* Mobile Floating Drawer + Bottom Nav Dual-Theme Optical Glass */
+.lg-drawer-optical {
+  background-color: rgba(242, 246, 253, 0.86);
+  background-image: linear-gradient(155deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.04));
+  backdrop-filter: blur(26px) saturate(175%);
+  -webkit-backdrop-filter: blur(26px) saturate(175%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.95),
+    0 24px 56px -18px rgba(15, 23, 42, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  color: #0f172a;
+}
+
+.lg-drawer-optical.is-dark-zone,
+html.theme-dark:not(.wave-animating) .lg-drawer-optical {
+  background-color: rgba(10, 18, 36, 0.90);
+  background-image: linear-gradient(155deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.01));
+  box-shadow:
+    inset 0 1px 1px rgba(186, 230, 253, 0.22),
+    0 24px 60px -16px rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #f1f5f9;
+}
+
+.lg-sheet-optical {
+  background: rgba(250, 252, 255, 0.92);
+  backdrop-filter: blur(28px) saturate(165%);
+  -webkit-backdrop-filter: blur(28px) saturate(165%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.95), 0 -16px 48px -12px rgba(15, 23, 42, 0.24);
+  color: var(--color-foreground);
+}
+
+.lg-sheet-optical.is-dark-zone,
+html.theme-dark:not(.wave-animating) .lg-sheet-optical {
+  background: rgba(11, 20, 38, 0.92);
+  box-shadow: inset 0 1px 1px rgba(186, 230, 253, 0.2), 0 -16px 48px -12px rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+/* Native date/select color adaptation in dark mode */
+.is-dark-zone select option,
+html.theme-dark:not(.wave-animating) select option {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+.bg-background {
+  transition: background-color 1.4s ease;
+}
+
+/* Ensure SectionTitle accent + text stay readable everywhere */
+.is-dark-zone h1,
+.is-dark-zone h2,
+.is-dark-zone h3,
+html.theme-dark:not(.wave-animating) h1,
+html.theme-dark:not(.wave-animating) h2,
+html.theme-dark:not(.wave-animating) h3 {
+  color: var(--ink-1);
+}
+
+.is-dark-zone .border-white\/70,
+.is-dark-zone .ring-white\/70,
+html.theme-dark:not(.wave-animating) .border-white\/70,
+html.theme-dark:not(.wave-animating) .ring-white\/70 {
+  --tw-ring-color: rgba(148, 163, 184, 0.26);
+}
+
+/* Leaflet map fixes for Tailwind v4 preflight + custom geofence pin */
+.leaflet-container {
+  font-family: inherit;
+  z-index: 0;
+}
+
+.leaflet-container img {
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.geo-pin-wrapper {
+  background: transparent;
+  border: none;
+}
+
+.geo-pin-dot {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: rgba(14, 143, 126, 0.24);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+}
+
+.geo-pin-dot:active {
+  cursor: grabbing;
+}
+
+.geo-pin-dot span {
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #0e8f7e;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.is-dark-zone .leaflet-control-attribution,
+html.theme-dark:not(.wave-animating) .leaflet-control-attribution {
+  background: rgba(15, 23, 42, 0.78) !important;
+  color: #cbd5e1 !important;
+}
+
+.is-dark-zone .leaflet-control-attribution a,
+html.theme-dark:not(.wave-animating) .leaflet-control-attribution a {
+  color: #5eead4 !important;
 }

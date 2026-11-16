@@ -5,7 +5,7 @@ CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname='user_role' AND typnamespace='public'::regnamespace) THEN
-    CREATE TYPE public.user_role AS ENUM ('PENGHUNI','MONITOR','ADMIN','VILLAGE_DEAN');
+    CREATE TYPE public.user_role AS ENUM ('PENGHUNI','MONITOR','ADMIN');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname='resident_status' AND typnamespace='public'::regnamespace) THEN
     CREATE TYPE public.resident_status AS ENUM ('AKTIF','NONAKTIF');

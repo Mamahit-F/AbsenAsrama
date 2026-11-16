@@ -1,136 +1,105 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowRight, CalendarClock, LogIn, ScanFace, ShieldCheck, ShieldUser, UserPlus, UserRound, UsersRound } from "lucide-react";
-import { NightHeader, Page, ScanArt } from "../../components/layout";
-import { Button, IconTile, Item, LiveDot, SectionTitle, easeOut, spring, type Paint } from "../../components/ui";
-import { CinematicFooter } from "../../components/ui/motion-footer";
+import { ArrowRight, ScanFace } from "lucide-react";
+import { LiveDot, easeOut } from "../../components/ui";
+import { LiquidDrippingButton } from "../../components/LiquidDrippingButton";
 import { wita } from "../../lib/utils";
-
-const STEPS: { icon: typeof ScanFace; paint: Paint; title: string; text: string }[] = [
-  { icon: CalendarClock, paint: "amber", title: "Sesi dibuka", text: "Tombol presensi aktif tepat di jam mulai sesi." },
-  { icon: ShieldCheck, paint: "violet", title: "Liveness", text: "Memastikan wajah asli, bukan foto atau rekaman." },
-  { icon: ScanFace, paint: "sky", title: "Dicocokkan", text: "Hadir tercatat dalam hitungan detik." },
-];
-
-const ROLES: { k: string; d: string; icon: typeof ScanFace; paint: Paint }[] = [
-  { k: "Penghuni", d: "Presensi mandiri & riwayat", icon: UserRound, paint: "violet" },
-  { k: "Penjaga", d: "Pantau sesi & bantu scan", icon: UsersRound, paint: "amber" },
-  { k: "Admin", d: "Data, akun & audit", icon: ShieldUser, paint: "rose" },
-];
 
 export default function Welcome() {
   const nav = useNavigate();
   const w = wita();
-  const words = ["Hadir", "cukup", "dengan"];
 
   return (
-    <Page nav={false} className="!pb-0">
-      <NightHeader className="pb-24">
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: easeOut }} className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-2.5">
-            <span className="night-card grid size-10 place-items-center rounded-2xl">
-              <ScanFace className="size-5" stroke="url(#g-violet)" strokeWidth={2.4} aria-hidden />
-            </span>
-            <span className="font-display text-[17px] font-semibold text-white">Presensi Asrama</span>
-          </div>
-          <span className="night-inset flex items-center gap-2 rounded-full px-3 py-1.5 font-display text-xs text-night-ink tabular">
+    <section className="relative flex min-h-dvh w-full flex-col justify-between overflow-hidden bg-transparent text-white select-none">
+      {/* Soft center scrim for crisp typography contrast without dulling the orb */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_46%,rgba(7,6,20,0.26)_0%,transparent_64%)]"
+      />
+
+      {/* Top Navigation */}
+      <motion.header
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.35, ease: easeOut }}
+        className="relative z-10 mx-auto flex w-full max-w-6xl items-center justify-between px-6 pt-6 sm:px-10 sm:pt-7"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-8 place-items-center rounded-full bg-white text-[#121030] shadow-sm">
+            <ScanFace className="size-4" strokeWidth={2.2} aria-hidden />
+          </span>
+          <span className="font-display text-sm font-bold tracking-tight text-white sm:text-base">
+            Presensi Asrama
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3.5">
+          <span className="hidden items-center gap-2 font-display text-xs text-white/75 tabular sm:inline-flex">
             <LiveDot /> {w.time} WITA
           </span>
-        </motion.div>
+          <button
+            type="button"
+            onClick={() => nav("/masuk")}
+            className="lg-hero-liquid-btn cursor-pointer rounded-full px-4 py-1.5 text-xs font-semibold text-white hover:-translate-y-0.5 active:scale-[0.97]"
+          >
+            <span className="relative z-10">Masuk</span>
+          </button>
+        </div>
+      </motion.header>
 
-        <h1 className="mt-10 text-[46px] font-bold leading-[1] tracking-[-0.035em] text-white" aria-label="Hadir cukup dengan wajahmu.">
-          {words.map((word, i) => (
-            <span key={word} className="inline-block overflow-hidden pb-1 align-bottom">
-              <motion.span aria-hidden className="inline-block" initial={{ y: "110%" }} animate={{ y: 0 }} transition={{ duration: 0.75, ease: easeOut, delay: 0.15 + i * 0.08 }}>
-                {word}&nbsp;
-              </motion.span>
-            </span>
-          ))}
-          <span className="inline-block overflow-hidden pb-1 align-bottom">
+      {/* Center Hero Content */}
+      <main className="relative z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center px-6 pb-10 text-center">
+        <h1
+          className="font-display text-[40px] font-bold leading-[1.05] tracking-[-0.03em] text-white drop-shadow-[0_2px_20px_rgba(0,0,0,0.85)] sm:text-[58px]"
+          aria-label="Hadir cukup dengan wajahmu."
+        >
+          <span className="block overflow-hidden pb-1">
             <motion.span
               aria-hidden
-              className="inline-block bg-gradient-to-r from-[#f0abfc] via-[#c084fc] to-[#818cf8] bg-clip-text text-transparent"
-              initial={{ y: "110%" }}
+              className="block"
+              initial={{ y: "105%" }}
               animate={{ y: 0 }}
-              transition={{ duration: 0.75, ease: easeOut, delay: 0.4 }}
+              transition={{ duration: 0.9, delay: 0.08, ease: easeOut }}
             >
-              wajahmu.
+              Hadir cukup
+            </motion.span>
+          </span>
+          <span className="block overflow-hidden pb-1.5">
+            <motion.span
+              aria-hidden
+              className="block bg-gradient-to-r from-[#D5F0EA] via-[#3CC4AE] to-[#b8b5f5] bg-clip-text text-transparent"
+              initial={{ y: "105%" }}
+              animate={{ y: 0 }}
+              transition={{ duration: 0.9, delay: 0.18, ease: easeOut }}
+            >
+              dengan wajahmu.
             </motion.span>
           </span>
         </h1>
-        <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: easeOut, delay: 0.55 }} className="mt-4 max-w-[30ch] text-[15px] leading-relaxed text-night-muted">
-          Presensi sesi asrama UNKLAB diverifikasi liveness dan pengenalan wajah. Tidak bisa dititipkan.
+
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.4, ease: easeOut }}
+          className="mt-4 max-w-[34ch] text-sm leading-relaxed text-white/85 drop-shadow-[0_2px_14px_rgba(0,0,0,0.9)] sm:text-[15px]"
+        >
+          Presensi sesi asrama UNKLAB cepat &amp; otomatis dengan pengenalan wajah.
         </motion.p>
-      </NightHeader>
 
-      <section className="-mt-6">
-        <ScanArt className="w-64" />
-        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring, delay: 0.6 }} className="mt-8 space-y-4">
-          <Button block size="lg" onClick={() => nav("/masuk")} icon={<LogIn className="size-5" />}>
-            Masuk
-          </Button>
-          <Button block size="lg" variant="glass" onClick={() => nav("/daftar")} icon={<UserPlus className="size-5" />}>
-            Buat akun penghuni
-          </Button>
+        <motion.div
+          initial={{ opacity: 0, y: 12, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.65, delay: 0.65, ease: easeOut }}
+          className="mt-7 flex items-center justify-center"
+        >
+          <LiquidDrippingButton onClick={() => nav("/masuk")}>
+            <span>Masuk ke Akun</span>
+            <ArrowRight className="size-4" aria-hidden />
+          </LiquidDrippingButton>
         </motion.div>
-      </section>
+      </main>
 
-      <SectionTitle>Cara kerjanya</SectionTitle>
-      <div className="grid grid-cols-3 gap-3">
-        {STEPS.map((s, i) => (
-          <Item key={s.title} className="flex flex-col items-center text-center">
-            <motion.div whileTap={{ scale: 0.92 }}>
-              <IconTile icon={s.icon} paint={s.paint} size={84} />
-            </motion.div>
-            <span className="mt-3 font-display text-[11px] font-semibold text-subtle tabular">0{i + 1}</span>
-            <h3 className="font-display text-[15px] font-semibold">{s.title}</h3>
-            <p className="mt-1 text-[12px] leading-snug text-muted">{s.text}</p>
-          </Item>
-        ))}
-      </div>
-
-      <SectionTitle>Masuk sebagai</SectionTitle>
-      <div className="space-y-3 pb-10">
-        {ROLES.map((r) => (
-          <Item key={r.k}>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={() => nav(`/masuk?peran=${r.k.toLowerCase()}`)}
-              className="soft flex w-full items-center gap-4 rounded-[26px] p-3 pr-5 text-left active:shadow-[var(--sh-inset)]"
-            >
-              <IconTile icon={r.icon} paint={r.paint} size={52} />
-              <span className="min-w-0 flex-1">
-                <span className="block font-display text-[16px] font-semibold">{r.k}</span>
-                <span className="block truncate text-[13px] text-muted">{r.d}</span>
-              </span>
-              <span className="soft-inset grid size-9 place-items-center rounded-full text-primary">
-                <ArrowRight className="size-4" aria-hidden />
-              </span>
-            </motion.button>
-          </Item>
-        ))}
-      </div>
-
-      <div className="-mx-5">
-        <CinematicFooter
-          heading={
-            <>
-              Siap
-              <br />
-              hadir?
-            </>
-          }
-          sub="Masuk dengan NIM, atau buat akun jika NIM Anda ada di daftar penghuni resmi."
-          primary={{ label: "Masuk sekarang", onClick: () => nav("/masuk"), icon: <LogIn className="size-5" aria-hidden /> }}
-          secondary={{ label: "Buat akun penghuni", onClick: () => nav("/daftar"), icon: <UserPlus className="size-5" aria-hidden /> }}
-          links={[
-            { label: "Penjaga", onClick: () => nav("/masuk?peran=penjaga") },
-            { label: "Admin", onClick: () => nav("/masuk?peran=admin") },
-          ]}
-          marquee={["Liveness anti-spoofing", "Pengenalan wajah", "Sesi terjadwal", "Waktu WITA", "Rekap CSV", "Audit log"]}
-          giantText="HADIR"
-        />
-      </div>
-    </Page>
+      <div className="h-4" aria-hidden />
+    </section>
   );
 }

@@ -4,6 +4,7 @@ import id.ac.unklab.asrama.admin.AdminDtos.*;
 import id.ac.unklab.asrama.common.ApiResponse;
 import id.ac.unklab.asrama.common.DomainEnums.UserRole;
 import id.ac.unklab.asrama.resident.ResidentDtos.ResidentProfileDto;
+import id.ac.unklab.asrama.security.AppPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -11,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -84,7 +86,7 @@ public class AdminController {
     }
 
     @GetMapping("/users")
-    @Operation(summary = "Daftar seluruh akun pengguna (PENGHUNI, MONITOR, VILLAGE_DEAN, ADMIN) dengan filter role, pencarian, dan paginasi")
+    @Operation(summary = "Daftar seluruh akun pengguna (PENGHUNI, MONITOR, ADMIN) dengan filter role, pencarian, dan paginasi")
     public ResponseEntity<ApiResponse<List<UserAccountDto>>> listUsers(
             @RequestParam(required = false) UserRole role,
             @RequestParam(required = false) String search,
@@ -95,7 +97,7 @@ public class AdminController {
     }
 
     @PostMapping("/users")
-    @Operation(summary = "Membuat akun petugas baru (MONITOR, VILLAGE_DEAN, atau ADMIN) (A-04)")
+    @Operation(summary = "Membuat akun petugas baru (MONITOR atau ADMIN) (A-04)")
     public ResponseEntity<ApiResponse<UserAccountDto>> createStaffUser(@Valid @RequestBody CreateStaffUserRequest request) {
         UserAccountDto created = adminService.createStaffUser(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -113,13 +115,23 @@ public class AdminController {
     }
 
     @PatchMapping("/users/{userId}/role")
-    @Operation(summary = "Mengubah role kewenangan pengguna dalam sistem (ADMIN, MONITOR, VILLAGE_DEAN, PENGHUNI)")
+    @Operation(summary = "Mengubah role kewenangan pengguna dalam sistem (ADMIN, MONITOR, PENGHUNI)")
     public ResponseEntity<ApiResponse<UserAccountDto>> updateUserRole(
             @PathVariable UUID userId,
             @Valid @RequestBody ChangeUserRoleRequest request
     ) {
         UserAccountDto updated = adminService.updateUserRole(userId, request.role());
         return ResponseEntity.ok(ApiResponse.ok("Role pengguna berhasil diperbarui", updated));
+    }
+
+    @PatchMapping("/users/{userId}/hall")
+    @Operation(summary = "Menetapkan atau mengubah penugasan Hall untuk petugas Monitor (Hall A1, Hall B1, Hall A2, Hall B2) (A-04)")
+    public ResponseEntity<ApiResponse<UserAccountDto>> updateUserHall(
+            @PathVariable UUID userId,
+            @RequestBody ChangeUserHallRequest request
+    ) {
+        UserAccountDto updated = adminService.updateUserHall(userId, request.hallName());
+        return ResponseEntity.ok(ApiResponse.ok("Penugasan Hall petugas berhasil diperbarui", updated));
     }
 
     @PostMapping("/users/{userId}/reset-password")
@@ -130,5 +142,15 @@ public class AdminController {
     ) {
         adminService.resetUserPassword(userId, request);
         return ResponseEntity.ok(ApiResponse.ok("Password akun berhasil di-reset", null));
+    }
+
+    @DeleteMapping("/users/{userId}")
+    @Operation(summary = "Menghapus akun pengguna (Penghuni dengan retensi riwayat presensi A-03, atau akun Penjaga/Admin)")
+    public ResponseEntity<ApiResponse<Void>> deleteUser(
+            @PathVariable UUID userId,
+            @AuthenticationPrincipal AppPrincipal principal
+    ) {
+        adminService.deleteUser(userId, principal != null ? principal.userId() : null);
+        return ResponseEntity.ok(ApiResponse.ok("Akun pengguna berhasil dihapus", null));
     }
 }

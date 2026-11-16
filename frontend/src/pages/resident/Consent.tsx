@@ -118,7 +118,7 @@ export default function Consent() {
                   aria-expanded={on}
                   className="flex w-full items-center gap-3 p-4 text-left"
                 >
-                  <span className="grid size-10 shrink-0 place-items-center rounded-2xl soft-sm text-primary">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
                     <s.icon className="size-5" aria-hidden />
                   </span>
                   <span className="flex-1 text-[15px] font-semibold">{s.title}</span>

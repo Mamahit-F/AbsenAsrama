@@ -18,7 +18,7 @@ import { useAuth } from "../../state/app";
 import { cn, fmtDate, fmtLongToday, fmtMethodLabel, shiftDate, toMin, toWitaDate, toWitaTime, wita } from "../../lib/utils";
 
 export default function ResidentHome() {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const nav = useNavigate();
   const w = wita();
 
@@ -33,22 +33,37 @@ export default function ResidentHome() {
     setLoading(true);
     setError(null);
     try {
-      const [prof, act, sessList, hist] = await Promise.all([
+      const [profResult, actResult, sessResult, histResult] = await Promise.allSettled([
         residentsApi.getMyProfile(),
         schedulesApi.getActiveSession(),
         schedulesApi.listSessions(),
         attendanceApi.getMyHistory({ limit: 60 }),
+        refreshProfile(),
       ]);
-      setProfile(prof);
-      setActive(act);
-      setSessions(sessList);
-      setHistory(hist);
+
+      if (profResult.status === "fulfilled") {
+        setProfile(profResult.value);
+      }
+      if (actResult.status === "fulfilled") {
+        setActive(actResult.value);
+      }
+      if (sessResult.status === "fulfilled") {
+        setSessions(sessResult.value);
+      }
+      if (histResult.status === "fulfilled") {
+        setHistory(histResult.value);
+      }
+
+      if (profResult.status === "rejected") {
+        const err = profResult.reason;
+        setError(isApiError(err) ? err.message : "Gagal memuat data beranda penghuni.");
+      }
     } catch (e) {
       setError(isApiError(e) ? e.message : "Gagal memuat data beranda penghuni.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refreshProfile]);
 
   useEffect(() => {
     void loadData();
@@ -128,7 +143,7 @@ export default function ResidentHome() {
     <Page>
       <NightHeader
         left={
-          <IconButton label="Muat ulang" tone="navy" onClick={() => void loadData()}>
+          <IconButton label="Muat ulang" tone="glass" onClick={() => void loadData()}>
             <Bell className="size-5" aria-hidden />
           </IconButton>
         }
@@ -138,74 +153,114 @@ export default function ResidentHome() {
           </button>
         }
         right={
-          <IconButton label="Riwayat" tone="navy" onClick={() => nav("/penghuni/riwayat")}>
+          <IconButton label="Riwayat" tone="glass" onClick={() => nav("/penghuni/riwayat")}>
             <History className="size-5" aria-hidden />
           </IconButton>
         }
       >
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }} className="mt-6 text-[13px] text-night-muted">
-          {fmtLongToday()}
-        </motion.p>
-        <motion.h1 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: easeOut, delay: 0.1 }} className="text-[30px] font-bold text-white">
-          Halo, {displayName.split(" ")[0]}
-        </motion.h1>
+        <div className="mt-3 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 max-w-lg text-center lg:text-left">
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.12 }} className="text-[13px] font-semibold ink-4">
+              {fmtLongToday()}
+            </motion.p>
+            <motion.h1 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: easeOut, delay: 0.08 }} className="hero-metric-wrap mt-1 text-[30px] font-bold leading-tight ink-1">
+              Halo, {displayName.split(" ")[0]}
+            </motion.h1>
 
-        <motion.div initial={{ opacity: 0, y: 26, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ ...spring, delay: 0.2 }} className="night-card mt-5 rounded-[30px] p-5">
-          <div className="flex items-start gap-4">
-            <IconTile icon={ScanFace} paint="violet" size={54} night />
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 text-[12px] font-medium text-night-muted">
-                {active ? <LiveDot /> : <span className="size-2 rounded-full bg-white/30" aria-hidden />}
-                {loading
-                  ? "Memeriksa sesi…"
-                  : active
-                    ? "Sedang berlangsung"
-                    : next
-                      ? "Sesi berikutnya"
-                      : "Tidak ada sesi aktif"}
-              </p>
-              <h2 className="mt-1 truncate text-[24px] font-semibold leading-tight text-white">
-                {loading
-                  ? "Memuat jadwal…"
-                  : active
-                    ? active.scheduleName
-                    : next
-                      ? next.session.scheduleName
-                      : "Tidak ada sesi saat ini"}
-              </h2>
-              <p className="mt-0.5 font-display text-[13px] text-night-muted tabular">
-                {active
-                  ? `${activeStartStr} – ${activeEndStr} WITA`
-                  : next
-                    ? `Dibuka ${toWitaTime(next.session.startsAt)} · ${Math.floor(next.startsIn / 60) ? `${Math.floor(next.startsIn / 60)} j ` : ""}${next.startsIn % 60} mnt lagi`
-                    : "Menunggu sesi presensi berikutnya"}
-              </p>
-            </div>
+            {/* Badge Status Hall */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              className="mt-3 flex flex-wrap items-center justify-center gap-3 lg:justify-start"
+            >
+              {profile?.hallName ? (
+                <span className="inline-flex items-center gap-2 font-display text-xs font-semibold ink-teal">
+                  <span className="size-2 rounded-full bg-current animate-pulse" aria-hidden />
+                  Terdaftar di {profile.hallName}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-2 font-display text-xs font-semibold text-warning">
+                  <ShieldAlert className="size-3.5 text-warning" aria-hidden />
+                  Belum Terdaftar di Hall — Hubungi Monitor Hall
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => void loadData()}
+                disabled={loading}
+                aria-label="Refresh status Hall dan data beranda"
+                title="Refresh status Hall"
+                className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-display text-[11.5px] font-semibold ink-3 transition hover:bg-black/[0.05] dark:hover:bg-white/[0.08] disabled:opacity-60"
+              >
+                <RefreshCw className={cn("size-3", loading && "animate-spin")} aria-hidden />
+                Refresh
+              </button>
+            </motion.div>
           </div>
-          {active && (
-            <div className="mt-5">
-              <Meter value={progress} night />
-              <p className="mt-2 text-right font-display text-[12px] text-night-muted tabular">
-                sisa {Math.max(0, toMin(activeEndStr) - w.minutes)} menit
-              </p>
-            </div>
-          )}
-          <div className="mt-4">
-            {doneNow ? (
-              <div className="night-inset flex h-12 items-center justify-center gap-2 rounded-full text-sm font-medium text-white">
-                <CheckCircle2 className="size-5 text-[#6ee7b7]" aria-hidden /> Sudah presensi di sesi ini
+
+          <motion.div
+            initial={{ opacity: 0, y: 20, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ ...spring, delay: 0.18 }}
+            className="w-full shrink-0 border-t border-line/50 pt-4 lg:w-[320px] lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0"
+          >
+            <div className="flex items-start gap-3.5">
+              <IconTile icon={ScanFace} paint="violet" size={48} flat />
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-2 text-[12px] font-semibold ink-4">
+                  {active ? <LiveDot /> : <span className="size-2 rounded-full bg-current opacity-30" aria-hidden />}
+                  {loading
+                    ? "Memeriksa sesi…"
+                    : active
+                      ? "Sedang berlangsung"
+                      : next
+                        ? "Sesi berikutnya"
+                        : "Tidak ada sesi aktif"}
+                </p>
+                <h2 className="mt-1 truncate text-[21px] font-semibold leading-tight ink-1">
+                  {loading
+                    ? "Memuat jadwal…"
+                    : active
+                      ? active.scheduleName
+                      : next
+                        ? next.session.scheduleName
+                        : "Tidak ada sesi saat ini"}
+                </h2>
+                <p className="mt-0.5 font-display text-[12.5px] ink-4 tabular">
+                  {active
+                    ? `${activeStartStr} – ${activeEndStr} WITA`
+                    : next
+                      ? `Dibuka ${toWitaTime(next.session.startsAt)} · ${Math.floor(next.startsIn / 60) ? `${Math.floor(next.startsIn / 60)} j ` : ""}${next.startsIn % 60} mnt lagi`
+                      : "Menunggu sesi presensi berikutnya"}
+                </p>
               </div>
-            ) : active ? (
-              <Button block size="lg" onClick={() => nav("/penghuni/scan")} icon={<ScanFace className="size-5" />}>
-                Presensi sekarang
-              </Button>
-            ) : (
-              <div className="night-inset flex h-12 items-center justify-center gap-2 rounded-full text-[13px] text-night-muted">
-                <Clock3 className="size-4" aria-hidden /> Tombol aktif saat sesi dibuka
+            </div>
+            {active && (
+              <div className="mt-4">
+                <Meter value={progress} />
+                <p className="mt-1.5 text-right font-display text-[11.5px] ink-4 tabular">
+                  sisa {Math.max(0, toMin(activeEndStr) - w.minutes)} menit
+                </p>
               </div>
             )}
-          </div>
-        </motion.div>
+            <div className="mt-4">
+              {doneNow ? (
+                <div className="flex items-center gap-2 text-sm font-semibold text-success">
+                  <CheckCircle2 className="size-4.5" aria-hidden /> Sudah presensi di sesi ini
+                </div>
+              ) : active ? (
+                <Button block size="md" onClick={() => nav("/penghuni/scan")} icon={<ScanFace className="size-5" />}>
+                  Presensi sekarang
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2 text-[12.5px] font-medium ink-4">
+                  <Clock3 className="size-4" aria-hidden /> Tombol aktif saat sesi dibuka
+                </div>
+              )}
+            </div>
+          </motion.div>
+        </div>
       </NightHeader>
 
       {error && (
@@ -218,7 +273,7 @@ export default function ResidentHome() {
       )}
 
       {!loading && !faceOk && (
-        <PressCard onClick={() => nav("/penghuni/wajah")} className="-mt-4 mb-2 flex items-center gap-3 !bg-warning-soft">
+        <PressCard glass={false} onClick={() => nav("/penghuni/wajah")} className="-mt-4 mb-2 flex items-center gap-3 !bg-warning-soft">
           <ShieldAlert className="size-6 shrink-0 text-warning" aria-hidden />
           <span className="flex-1">
             <span className="block font-semibold text-warning">Wajah belum terdaftar</span>
@@ -229,7 +284,7 @@ export default function ResidentHome() {
       )}
 
       {/* ---------- weekly ring + face ---------- */}
-      <div className="grid grid-cols-[1.15fr_1fr] gap-4">
+      <div className="grid grid-cols-[1.15fr_1fr] gap-4 lg:mt-4 lg:gap-6">
         <Card className="flex flex-col items-center py-5">
           <Ring value={Math.min(1, weekHits / weekSessionsCount)} size={118} stroke={11}>
             <span className="font-display text-[26px] font-semibold tabular">
@@ -285,7 +340,7 @@ export default function ResidentHome() {
       ) : (
         <Card className="px-4 pb-5 pt-7">
           <div className="relative">
-            <div className="absolute left-[8%] right-[8%] top-[13px] h-[3px] rounded-full bg-[#d6d8e9]" aria-hidden />
+            <div className="absolute left-[8%] right-[8%] top-[13px] h-[3px] rounded-full bg-line" aria-hidden />
             <motion.div
               className="absolute left-[8%] top-[13px] h-[3px] origin-left rounded-full"
               style={{
@@ -293,9 +348,8 @@ export default function ResidentHome() {
                 width: `${todaySessions.length > 1 ? (focusIdx / (todaySessions.length - 1)) * 84 : 0}%`,
               }}
               initial={{ scaleX: 0 }}
-              whileInView={{ scaleX: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 1, ease: easeOut, delay: 0.2 }}
+              animate={{ scaleX: 1 }}
+              transition={{ duration: 0.7, ease: easeOut, delay: 0.08 }}
               aria-hidden
             />
             <ol className="relative grid" style={{ gridTemplateColumns: `repeat(${Math.max(1, todaySessions.length)}, minmax(0,1fr))` }}>
@@ -308,14 +362,13 @@ export default function ResidentHome() {
                 return (
                   <motion.li
                     key={s.id}
-                    initial={{ opacity: 0, y: 12 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ ...spring, delay: 0.15 + i * 0.1 }}
+                    initial={{ opacity: 0.95, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ ...spring, delay: Math.min(i * 0.04, 0.16) }}
                     className="flex flex-col items-center text-center"
                   >
                     <span className={cn("soft-sm grid size-[29px] place-items-center rounded-full")}>
-                      <span className={cn("size-3 rounded-full", hit ? "bg-success" : isActive ? "bg-[#c026d3]" : past ? "bg-danger" : "bg-[#c6c9de]")} />
+                      <span className={cn("size-3 rounded-full", hit ? "bg-success" : isActive ? "bg-[#3CC4AE] shadow-[0_0_10px_#3CC4AE]" : past ? "bg-danger" : "bg-line-strong")} />
                     </span>
                     <span className={cn("mt-3 rounded-full px-3 py-1 font-display text-[13px] font-semibold tabular", focus ? "grad-accent" : "soft-sm text-muted")}>
                       {toWitaTime(s.startsAt)}
@@ -335,7 +388,7 @@ export default function ResidentHome() {
       {/* ---------- recent ---------- */}
       <SectionTitle
         action={
-          <motion.button whileTap={{ scale: 0.94 }} onClick={() => nav("/penghuni/riwayat")} className="soft-sm flex h-9 items-center gap-1 rounded-full px-3.5 text-[13px] font-semibold text-primary">
+          <motion.button data-wave-sync="" whileTap={{ scale: 0.94 }} onClick={() => nav("/penghuni/riwayat")} className="micro-glass flex h-9 items-center gap-1 rounded-full px-3.5 text-[13px] font-semibold ink-teal">
             Semua <ChevronRight className="size-4" aria-hidden />
           </motion.button>
         }
@@ -349,16 +402,16 @@ export default function ResidentHome() {
           const sessName = sessionMap.get(a.sessionId)?.scheduleName || "Sesi Presensi";
           const mLabel = fmtMethodLabel(a.method);
           return (
-            <Item key={a.id} className="soft flex items-center gap-4 rounded-[26px] p-3 pr-4">
-              <div className="night grid h-[58px] w-[50px] place-items-center rounded-[18px] text-center">
+            <Item key={a.id} data-glass="card" data-radius="24" data-wave-sync="" className="glass flex items-center gap-4 rounded-[24px] p-3 pr-4">
+              <div className="icon-well grid h-[54px] w-[50px] shrink-0 place-items-center rounded-[16px] text-center">
                 <div>
-                  <p className="font-display text-[19px] font-semibold leading-none text-white">{fmtDate(recDate, { day: "numeric" })}</p>
-                  <p className="mt-0.5 text-[10px] font-medium uppercase text-night-muted">{fmtDate(recDate, { month: "short" })}</p>
+                  <p className="font-display text-[19px] font-bold leading-none ink-1">{fmtDate(recDate, { day: "numeric" })}</p>
+                  <p className="mt-0.5 text-[10px] font-semibold uppercase ink-4">{fmtDate(recDate, { month: "short" })}</p>
                 </div>
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-display text-[15px] font-semibold">{sessName}</p>
-                <p className="font-display text-[13px] text-muted tabular">{recTime} WITA</p>
+                <p className="truncate font-display text-[15px] font-semibold ink-1">{sessName}</p>
+                <p className="font-display text-[13px] ink-4 tabular">{recTime} WITA</p>
               </div>
               {a.status === "HADIR" ? (
                 <Badge tone={methodTone(mLabel)}>{mLabel}</Badge>

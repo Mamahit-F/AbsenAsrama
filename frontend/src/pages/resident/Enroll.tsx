@@ -23,6 +23,7 @@ import {
   type ResidentProfileDto,
 } from "../../api";
 import { useToast } from "../../state/app";
+import { useAiRecoveryPoll } from "../../lib/useAiRecoveryPoll";
 import { cn } from "../../lib/utils";
 
 const POSES: { key: string; apiPose: FacePose; label: string; hint: string }[] = [
@@ -54,6 +55,7 @@ export default function Enroll() {
   const [profile, setProfile] = useState<ResidentProfileDto | null>(null);
   const [enrollment, setEnrollment] = useState<EnrollmentDetailDto | null>(null);
   const [aiAvailable, setAiAvailable] = useState<boolean>(true);
+  const [aiStarting, setAiStarting] = useState<boolean>(false);
   const [camAccess, setCamAccess] = useState<CamAccessState>("loading");
   const [loadingInit, setLoadingInit] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
@@ -76,10 +78,11 @@ export default function Enroll() {
     try {
       const [prof, aiStat] = await Promise.all([
         residentsApi.getMyProfile(),
-        attendanceApi.getAiStatus().catch(() => ({ available: false, healthy: false, service: "AI", status: "OFFLINE" })),
+        attendanceApi.getAiStatus().catch(() => ({ available: false, healthy: false, starting: false, service: "AI", status: "OFFLINE" })),
       ]);
       setProfile(prof);
       setAiAvailable(Boolean(aiStat.available && aiStat.healthy));
+      setAiStarting(Boolean(aiStat.starting || aiStat.status === "STARTING"));
 
       if (!prof.hasActiveConsent) {
         nav("/penghuni/persetujuan", { replace: true });
@@ -113,6 +116,13 @@ export default function Enroll() {
   useEffect(() => {
     void initEnrollment();
   }, [initEnrollment]);
+
+  const handleAiStatus = useCallback((online: boolean, starting: boolean) => {
+    setAiAvailable(online);
+    setAiStarting(starting);
+  }, []);
+
+  useAiRecoveryPoll(!loadingInit && !aiAvailable, handleAiStatus);
 
   const isReenroll = Boolean(profile?.hasActiveFaceProfile);
   const currentPose = POSES[idx];
@@ -252,7 +262,7 @@ export default function Enroll() {
       />
 
       {!aiAvailable && (
-        <Card className="mb-3 flex items-start gap-2.5 !bg-warning-soft p-3.5 text-xs text-warning">
+        <Card glass={false} className="mb-3 flex items-start gap-2.5 !bg-warning-soft p-3.5 text-xs text-warning">
           <WifiOff className="mt-0.5 size-4 shrink-0" aria-hidden />
           <div className="flex-1">
             <p className="font-semibold">Layanan AI pengenalan wajah sedang tidak tersedia</p>
@@ -293,7 +303,7 @@ export default function Enroll() {
           Pose: {currentPose.label} ({currentPose.apiPose})
         </Badge>
         <Badge tone={aiAvailable ? "success" : "warning"}>
-          {aiAvailable ? "AI Online" : "AI Offline"}
+          {aiAvailable ? "AI Online" : aiStarting ? "Menyalakan AI…" : "AI Offline"}
         </Badge>
       </div>
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ClipboardPen, RefreshCw, ScanFace, Search } from "lucide-react";
+import { ClipboardPen, Pencil, RefreshCw, ScanFace, Search, UserPlus } from "lucide-react";
 import { Page, PageHead } from "../../components/layout";
 import { Avatar, Badge, Button, Card, Chip, Empty, Field, Item, Segmented, Stagger, methodTone } from "../../components/ui";
 import {
@@ -12,9 +12,12 @@ import {
   type ResidentProfileDto,
   type SessionDto,
 } from "../../api";
-import { fmtMethodLabel, toWitaDate, toWitaTime } from "../../lib/utils";
+import { useAuth, useToast } from "../../state/app";
+import { fmtMethodLabel, shiftDate, toWitaDate, toWitaTime, wita } from "../../lib/utils";
 
 export default function Roster() {
+  const { user } = useAuth();
+  const toast = useToast();
   const nav = useNavigate();
 
   const [sessions, setSessions] = useState<SessionDto[]>([]);
@@ -23,6 +26,9 @@ export default function Roster() {
   const [sessionId, setSessionId] = useState<string>("");
   const [tab, setTab] = useState<"semua" | "hadir" | "tidak">("semua");
   const [q, setQ] = useState("");
+  const [claimNim, setClaimNim] = useState("");
+  const [claiming, setClaiming] = useState(false);
+  const [claimMsg, setClaimMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingRecap, setLoadingRecap] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +40,7 @@ export default function Roster() {
       const [sessList, activeSess, resList] = await Promise.all([
         schedulesApi.listSessions(),
         schedulesApi.getActiveSession(),
-        residentsApi.listResidents({ status: "AKTIF", limit: 300 }),
+        residentsApi.listResidents({ status: "AKTIF" }),
       ]);
       const validSessions = sessList.filter((s) => s.status !== "CANCELLED");
       setSessions(validSessions);
@@ -51,6 +57,26 @@ export default function Roster() {
       setLoading(false);
     }
   }, []);
+
+  const handleClaimHall = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanNim = claimNim.trim();
+    if (!cleanNim) return;
+    setClaiming(true);
+    setClaimMsg(null);
+    try {
+      const res = await residentsApi.claimToMyHall(cleanNim);
+      toast(`Penghuni ${res.fullName} (${res.nim}) berhasil ditambahkan ke ${user?.hallName || "Hall Anda"}`);
+      setClaimMsg({ type: "ok", text: `Berhasil mendaftarkan ${res.fullName} (${res.nim}) ke ${user?.hallName || "Hall Anda"}` });
+      setClaimNim("");
+      void loadBase();
+    } catch (err) {
+      const msg = isApiError(err) ? err.message : "Gagal menambahkan penghuni ke Hall.";
+      setClaimMsg({ type: "err", text: msg });
+    } finally {
+      setClaiming(false);
+    }
+  };
 
   useEffect(() => {
     void loadBase();
@@ -80,15 +106,27 @@ export default function Roster() {
     };
   }, [sessionId]);
 
+  const selectedSession = useMemo(
+    () => sessions.find((s) => s.id === sessionId) ?? null,
+    [sessions, sessionId],
+  );
+  const isSessionClosedOrExpired = Boolean(
+    selectedSession && (selectedSession.status !== "OPEN" || Date.parse(selectedSession.endsAt) <= Date.now()),
+  );
+  const isWithin7Days = Boolean(
+    selectedSession && toWitaDate(selectedSession.startsAt) >= shiftDate(wita().date, -7),
+  );
+
   const rows = useMemo(() => {
     return residents.map((r) => {
       const rec = records.find(
-        (a) => (a.residentId === r.id || a.residentNim === r.nim) && a.status === "HADIR",
+        (a) => a.residentId === r.id || a.residentNim === r.nim,
       );
+      const isHadir = rec?.status === "HADIR";
       return {
         resident: r,
         rec,
-        status: rec ? ("Hadir" as const) : ("Tidak Hadir" as const),
+        status: isHadir ? ("Hadir" as const) : ("Tidak Hadir" as const),
       };
     });
   }, [residents, records]);
@@ -118,7 +156,45 @@ export default function Roster() {
 
   return (
     <Page>
-      <PageHead title="Kehadiran" eyebrow="Hari ini · Hadir / Tidak hadir" />
+      <PageHead
+        title="Kehadiran"
+        eyebrow={user?.hallName ? `Monitor ${user.hallName} · Hadir / Tidak hadir` : "Hari ini · Hadir / Tidak hadir"}
+      />
+
+      {/* Card Pendaftaran Penghuni ke Hall (J-09, P-06, K-07) */}
+      <Card className="mb-4 p-4">
+        <div className="flex items-center gap-2 text-xs font-bold text-primary">
+          <UserPlus className="size-4" />
+          <span>Tambah Penghuni ke {user?.hallName || "Hall Anda"}</span>
+        </div>
+        <p className="mt-1 text-xs text-muted">
+          Masukkan NIM penghuni yang sudah dibuatkan akun oleh Admin untuk mendaftarkannya ke Hall Anda.
+        </p>
+        <form onSubmit={handleClaimHall} className="mt-3 flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Ketik NIM penghuni (contoh: 105022010101)..."
+            value={claimNim}
+            onChange={(e) => {
+              setClaimNim(e.target.value);
+              setClaimMsg(null);
+            }}
+            className="soft-inset flex-1 rounded-xl px-3 py-2 text-xs text-foreground placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          <Button type="submit" size="sm" disabled={claiming || !claimNim.trim()}>
+            {claiming ? "Menambahkan…" : "+ Tambahkan"}
+          </Button>
+        </form>
+        {claimMsg && (
+          <div
+            className={`mt-2.5 rounded-lg px-3 py-1.5 text-xs font-medium ${
+              claimMsg.type === "ok" ? "bg-emerald-500/10 text-emerald-500" : "bg-danger/10 text-danger"
+            }`}
+          >
+            {claimMsg.text}
+          </div>
+        )}
+      </Card>
 
       {error && (
         <Card className="mb-3 flex items-center justify-between gap-3 p-4">
@@ -131,15 +207,27 @@ export default function Roster() {
 
       {/* Session selector chips */}
       <div className="no-scrollbar -mx-5 mb-3 flex gap-2 overflow-x-auto px-5">
-        {sessions.map((s) => (
-          <Chip key={s.id} on={s.id === sessionId} onClick={() => setSessionId(s.id)}>
-            {s.scheduleName} ({toWitaDate(s.startsAt).slice(5)} · {toWitaTime(s.startsAt)})
-          </Chip>
-        ))}
+        {sessions.map((s) => {
+          const closed = s.status !== "OPEN" || Date.parse(s.endsAt) <= Date.now();
+          return (
+            <Chip key={s.id} on={s.id === sessionId} onClick={() => setSessionId(s.id)}>
+              {s.scheduleName} ({toWitaDate(s.startsAt).slice(5)} · {toWitaTime(s.startsAt)}
+              {closed ? " · Ditutup" : ""})
+            </Chip>
+          );
+        })}
         {!loading && sessions.length === 0 && (
           <span className="text-xs text-muted">Belum ada sesi presensi yang dibuka.</span>
         )}
       </div>
+
+      {selectedSession && isSessionClosedOrExpired && (
+        <div className="mb-3 rounded-2xl bg-amber-500/12 px-3.5 py-2.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+          {isWithin7Days
+            ? "Sesi sudah ditutup — scan wajah dinonaktifkan. Penjaga tetap dapat mencatat manual atau mengedit riwayat presensi sesi ini (maksimal 7 hari ke belakang)."
+            : "Sesi sudah lebih dari 7 hari yang lalu — riwayat presensi hanya-baca dan tidak dapat diedit."}
+        </div>
+      )}
 
       <Segmented
         value={tab}
@@ -171,6 +259,7 @@ export default function Roster() {
             filtered.map(({ resident, rec, status }) => {
               const roomLabel = formatRoom(resident);
               const mLabel = rec ? fmtMethodLabel(rec.method) : "Scan";
+              const isFaceScan = rec?.method === "SCAN" || rec?.method === "DIBANTU_PENJAGA";
               return (
                 <Item key={resident.id} className="glass flex items-center gap-3 rounded-3xl p-3.5">
                   <Avatar name={resident.fullName} size={42} />
@@ -184,37 +273,64 @@ export default function Roster() {
                     <p className="font-display text-xs text-muted">{resident.nim}</p>
                     {rec && (
                       <p className="mt-0.5 text-xs text-muted">
-                        {toWitaTime(rec.recordedAt)} WITA · <span className="font-semibold">{mLabel}</span>
+                        {toWitaTime(rec.correctedAt || rec.recordedAt)} WITA · <span className="font-semibold">{mLabel}</span>
                         {rec.recordedByUsername ? ` oleh @${rec.recordedByUsername}` : ""}
-                        {rec.reason ? ` — "${rec.reason}"` : ""}
+                        {rec.correctionReason
+                          ? ` — Koreksi: "${rec.correctionReason}"`
+                          : rec.reason
+                            ? ` — "${rec.reason}"`
+                            : ""}
                       </p>
                     )}
                   </div>
 
                   {rec ? (
-                    <div className="flex flex-col items-end gap-1">
-                      <Badge tone="success">Hadir</Badge>
-                      <Badge tone={methodTone(mLabel)}>{mLabel}</Badge>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <div className="flex items-center gap-1">
+                        <Badge tone={rec.status === "HADIR" ? "success" : "danger"}>
+                          {rec.status === "HADIR" ? "Hadir" : "Tidak Hadir"}
+                        </Badge>
+                        {rec.method && <Badge tone={methodTone(mLabel)}>{mLabel}</Badge>}
+                      </div>
+                      {isFaceScan ? (
+                        <span className="text-[11px] font-medium text-muted">Terkunci (Scan Wajah)</span>
+                      ) : (
+                        isWithin7Days && (
+                          <button
+                            onClick={() => nav(`/penjaga/manual?residentId=${resident.id}&sessionId=${sessionId}`)}
+                            className="soft-inset flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold text-primary"
+                            aria-label={`Edit riwayat ${resident.fullName}`}
+                          >
+                            <Pencil className="size-3" aria-hidden /> Edit
+                          </button>
+                        )
+                      )}
                     </div>
                   ) : (
                     <div className="flex flex-col items-end gap-1.5">
                       <Badge tone="danger">{status}</Badge>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => nav(`/penjaga/bantu-scan?residentId=${resident.id}&sessionId=${sessionId}`)}
-                          className="soft-inset flex h-8 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold text-primary"
-                          aria-label={`Bantu scan ${resident.fullName}`}
-                        >
-                          <ScanFace className="size-3.5" aria-hidden /> Scan
-                        </button>
-                        <button
-                          onClick={() => nav(`/penjaga/manual?residentId=${resident.id}&sessionId=${sessionId}`)}
-                          className="soft-inset flex h-8 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold text-warning"
-                          aria-label={`Catat manual ${resident.fullName}`}
-                        >
-                          <ClipboardPen className="size-3.5" aria-hidden /> Manual
-                        </button>
-                      </div>
+                      {isWithin7Days ? (
+                        <div className="flex gap-1">
+                          {!isSessionClosedOrExpired && (
+                            <button
+                              onClick={() => nav(`/penjaga/bantu-scan?residentId=${resident.id}&sessionId=${sessionId}`)}
+                              className="soft-inset flex h-8 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold text-primary"
+                              aria-label={`Bantu scan ${resident.fullName}`}
+                            >
+                              <ScanFace className="size-3.5" aria-hidden /> Scan
+                            </button>
+                          )}
+                          <button
+                            onClick={() => nav(`/penjaga/manual?residentId=${resident.id}&sessionId=${sessionId}`)}
+                            className="soft-inset flex h-8 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold text-warning"
+                            aria-label={`Catat manual ${resident.fullName}`}
+                          >
+                            <ClipboardPen className="size-3.5" aria-hidden /> Manual
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] font-medium text-muted">Terkunci (&gt;7 hari)</span>
+                      )}
                     </div>
                   )}
                 </Item>

@@ -86,6 +86,24 @@ public class AuthService {
         UserLoginLookupRow user = authRepository.findUserForLogin(request.identifier().trim())
                 .orElseThrow(() -> BusinessException.unauthorized("INVALID_CREDENTIALS", "Username/NIM atau password salah"));
 
+        if (!passwordEncoder.matches(request.password(), user.passwordHash())) {
+            // Jangan membocorkan status nonaktif atau terkunci saat password salah
+            if (!user.isActive() || user.isLocked()) {
+                throw BusinessException.unauthorized("INVALID_CREDENTIALS", "Username/NIM atau password salah");
+            }
+            OffsetDateTime lockedUntil = authRepository.registerLoginFailure(user.id());
+            if (lockedUntil != null && lockedUntil.isAfter(OffsetDateTime.now())) {
+                log.warn("Account locked after 5 failed login attempts: userId={}", user.id());
+                throw new BusinessException(
+                        HttpStatus.LOCKED,
+                        "ACCOUNT_LOCKED",
+                        "Akun dikunci selama 5 menit karena 5 kali gagal login berturut-turut",
+                        Map.of("lockedUntil", lockedUntil.toString())
+                );
+            }
+            throw BusinessException.unauthorized("INVALID_CREDENTIALS", "Username/NIM atau password salah");
+        }
+
         if (!user.isActive()) {
             throw BusinessException.forbidden("ACCOUNT_INACTIVE", "Akun Anda telah dinonaktifkan oleh administrator");
         }
@@ -101,20 +119,6 @@ public class AuthService {
                     "Akun dikunci sementara selama 5 menit karena 5 kali gagal login berturut-turut",
                     Map.of("lockedUntil", user.lockedUntil() != null ? user.lockedUntil().toString() : "")
             );
-        }
-
-        if (!passwordEncoder.matches(request.password(), user.passwordHash())) {
-            OffsetDateTime lockedUntil = authRepository.registerLoginFailure(user.id());
-            if (lockedUntil != null && lockedUntil.isAfter(OffsetDateTime.now())) {
-                log.warn("Account locked after 5 failed login attempts: userId={}", user.id());
-                throw new BusinessException(
-                        HttpStatus.LOCKED,
-                        "ACCOUNT_LOCKED",
-                        "Akun dikunci selama 5 menit karena 5 kali gagal login berturut-turut",
-                        Map.of("lockedUntil", lockedUntil.toString())
-                );
-            }
-            throw BusinessException.unauthorized("INVALID_CREDENTIALS", "Username/NIM atau password salah");
         }
 
         authRepository.registerLoginSuccess(user.id());
@@ -177,7 +181,8 @@ public class AuthService {
                 user.role(),
                 user.residentId(),
                 user.residentStatus(),
-                user.isActive()
+                user.isActive(),
+                user.hallName()
         );
     }
 
@@ -188,7 +193,15 @@ public class AuthService {
                 .orElseThrow(() -> BusinessException.notFound("USER_NOT_FOUND", "Pengguna tidak ditemukan"));
 
         if (!passwordEncoder.matches(request.currentPassword(), user.passwordHash())) {
-            throw BusinessException.badRequest("INVALID_CURRENT_PASSWORD", "Password saat ini tidak sesuai");
+            throw BusinessException.badRequest("INVALID_CURRENT_PASSWORD", "Password lama tidak sesuai");
+        }
+        if (request.confirmPassword() != null && !request.confirmPassword().isBlank()) {
+            if (!request.newPassword().equals(request.confirmPassword())) {
+                throw BusinessException.badRequest("PASSWORD_MISMATCH", "Konfirmasi password baru tidak cocok");
+            }
+        }
+        if (request.newPassword().equals(request.currentPassword())) {
+            throw BusinessException.badRequest("SAME_PASSWORD", "Password baru tidak boleh sama dengan password lama");
         }
         String newHash = passwordEncoder.encode(request.newPassword());
         authRepository.updatePasswordHash(user.id(), newHash);
@@ -197,8 +210,8 @@ public class AuthService {
     }
 
     private AuthTokenResponse issueTokens(UserLoginLookupRow user) {
-        String accessToken = jwtTokenService.generateAccessToken(user.id(), user.username(), user.role(), user.residentId());
-        String refreshToken = jwtTokenService.generateRefreshToken(user.id(), user.username(), user.role(), user.residentId());
+        String accessToken = jwtTokenService.generateAccessToken(user.id(), user.username(), user.role(), user.residentId(), user.hallName());
+        String refreshToken = jwtTokenService.generateRefreshToken(user.id(), user.username(), user.role(), user.residentId(), user.hallName());
         UserSessionDto sessionDto = new UserSessionDto(
                 user.id(),
                 user.username(),
@@ -206,7 +219,8 @@ public class AuthService {
                 user.role(),
                 user.residentId(),
                 user.residentStatus(),
-                user.isActive()
+                user.isActive(),
+                user.hallName()
         );
         return new AuthTokenResponse(
                 accessToken,

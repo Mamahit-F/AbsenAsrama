@@ -127,7 +127,7 @@ public class SupabaseStorageService {
 
     private void assertStorageReadAuthorized(UUID residentId) {
         AppPrincipal principal = securityUtils.getCurrentPrincipal();
-        if (principal.role() == UserRole.ADMIN || principal.role() == UserRole.MONITOR || principal.role() == UserRole.VILLAGE_DEAN) {
+        if (principal.role() == UserRole.ADMIN || principal.role() == UserRole.MONITOR) {
             return;
         }
         if (principal.role() == UserRole.PENGHUNI

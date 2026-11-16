@@ -121,17 +121,17 @@ export default function Logs() {
                   </p>
                   <div className="mt-2 flex flex-wrap gap-2 font-display text-[11px] font-semibold text-primary">
                     {l.livenessScore !== null && l.livenessScore !== undefined && (
-                      <span className="soft-inset rounded-full px-2.5 py-0.5">
+                      <span className="rounded-full bg-primary/10 px-2.5 py-0.5">
                         Liveness: {(l.livenessScore * 100).toFixed(0)}%
                       </span>
                     )}
                     {l.faceScore !== null && l.faceScore !== undefined && (
-                      <span className="soft-inset rounded-full px-2.5 py-0.5">
+                      <span className="rounded-full bg-primary/10 px-2.5 py-0.5">
                         Skor ArcFace: {l.faceScore.toFixed(2)}
                       </span>
                     )}
                     {l.distanceM !== null && l.distanceM !== undefined && (
-                      <span className="soft-inset rounded-full px-2.5 py-0.5">
+                      <span className="rounded-full bg-primary/10 px-2.5 py-0.5">
                         Jarak: {Math.round(l.distanceM)} m
                       </span>
                     )}

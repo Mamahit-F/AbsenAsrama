@@ -69,4 +69,17 @@ export const residentsApi = {
       body: payload,
     });
   },
+
+  async claimToMyHall(nim: string): Promise<ResidentProfileDto> {
+    return apiRequest<ResidentProfileDto>("/residents/hall/claim", {
+      method: "POST",
+      body: { nim },
+    });
+  },
+
+  async getMyHallResidents(): Promise<ResidentProfileDto[]> {
+    return apiRequest<ResidentProfileDto[]>("/residents/hall/my-hall", {
+      method: "GET",
+    });
+  },
 };

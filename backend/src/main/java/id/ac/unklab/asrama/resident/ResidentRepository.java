@@ -20,21 +20,28 @@ public class ResidentRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    public static final RowMapper<ResidentProfileDto> RESIDENT_PROFILE_MAPPER = (rs, rowNum) -> new ResidentProfileDto(
-            UUID.fromString(rs.getString("id")),
-            rs.getString("nim"),
-            rs.getString("full_name"),
-            ResidentStatus.valueOf(rs.getString("status")),
-            ResidenceCategory.valueOf(rs.getString("residence_category")),
-            rs.getString("building"),
-            rs.getString("room_number"),
-            rs.getBoolean("has_face_profile"),
-            rs.getObject("face_enrolled_at", OffsetDateTime.class),
-            rs.getBoolean("has_active_consent"),
-            rs.getString("active_consent_version"),
-            rs.getObject("created_at", OffsetDateTime.class),
-            rs.getObject("updated_at", OffsetDateTime.class)
-    );
+    public static final RowMapper<ResidentProfileDto> RESIDENT_PROFILE_MAPPER = (rs, rowNum) -> {
+        String hall = null;
+        try {
+            hall = rs.getString("hall_name");
+        } catch (Exception ignored) {}
+        return new ResidentProfileDto(
+                UUID.fromString(rs.getString("id")),
+                rs.getString("nim"),
+                rs.getString("full_name"),
+                ResidentStatus.valueOf(rs.getString("status")),
+                ResidenceCategory.valueOf(rs.getString("residence_category")),
+                rs.getString("building"),
+                rs.getString("room_number"),
+                rs.getBoolean("has_face_profile"),
+                rs.getObject("face_enrolled_at", OffsetDateTime.class),
+                rs.getBoolean("has_active_consent"),
+                rs.getString("active_consent_version"),
+                rs.getObject("created_at", OffsetDateTime.class),
+                rs.getObject("updated_at", OffsetDateTime.class),
+                hall
+        );
+    };
 
     private static final RowMapper<ConsentDto> CONSENT_MAPPER = (rs, rowNum) -> new ConsentDto(
             UUID.fromString(rs.getString("id")),
@@ -66,7 +73,7 @@ public class ResidentRepository {
                    fp.enrolled_at AS face_enrolled_at,
                    EXISTS (SELECT 1 FROM public.consent_records cr WHERE cr.resident_id = r.id AND cr.revoked_at IS NULL) AS has_active_consent,
                    (SELECT cr.consent_version FROM public.consent_records cr WHERE cr.resident_id = r.id AND cr.revoked_at IS NULL ORDER BY cr.consented_at DESC LIMIT 1) AS active_consent_version,
-                   r.created_at, r.updated_at
+                   r.created_at, r.updated_at, r.hall_name
             FROM public.residents r
             LEFT JOIN public.face_profiles fp ON fp.resident_id = r.id
             """;
@@ -89,10 +96,42 @@ public class ResidentRepository {
         return rows.stream().findFirst();
     }
 
+    public List<ResidentProfileDto> findByHall(String hallName) {
+        return jdbcTemplate.query(
+                BASE_RESIDENT_SELECT + " WHERE r.hall_name = ? ORDER BY r.nim ASC",
+                RESIDENT_PROFILE_MAPPER,
+                hallName
+        );
+    }
+
+    public void updateResidentHall(UUID residentId, String hallName) {
+        jdbcTemplate.update(
+                "UPDATE public.residents SET hall_name = ?, updated_at = now() WHERE id = ?::uuid",
+                hallName,
+                residentId.toString()
+        );
+        jdbcTemplate.update(
+                "UPDATE public.users SET hall_name = ?, updated_at = now() WHERE resident_id = ?::uuid",
+                hallName,
+                residentId.toString()
+        );
+    }
+
     public List<ResidentProfileDto> searchResidents(
             ResidentStatus status,
             ResidenceCategory category,
             String search,
+            Integer limit,
+            Integer offset
+    ) {
+        return searchResidents(status, category, search, null, limit, offset);
+    }
+
+    public List<ResidentProfileDto> searchResidents(
+            ResidentStatus status,
+            ResidenceCategory category,
+            String search,
+            String hallName,
             Integer limit,
             Integer offset
     ) {
@@ -105,6 +144,10 @@ public class ResidentRepository {
         if (category != null) {
             sql.append(" AND r.residence_category = ?::public.residence_category");
             params.add(category.name());
+        }
+        if (hallName != null && !hallName.isBlank()) {
+            sql.append(" AND r.hall_name = ?");
+            params.add(hallName);
         }
         if (search != null && !search.isBlank()) {
             sql.append(" AND (LOWER(r.nim) LIKE ? OR LOWER(r.full_name) LIKE ?)");

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { CalendarX2, Clock3, HelpCircle, MapPin, MapPinOff, RotateCcw, ScanFace, ShieldAlert, Timer, WifiOff } from "lucide-react";
+import { CalendarX2, Clock3, HelpCircle, MapPin, MapPinOff, RotateCcw, ScanFace, ShieldAlert, Sparkles, Timer, WifiOff } from "lucide-react";
 import { Page, TopBar } from "../../components/layout";
 import {
   Pipeline,
@@ -23,7 +23,17 @@ import {
   type SessionDto,
 } from "../../api";
 import { useToast } from "../../state/app";
+import { useAiRecoveryPoll } from "../../lib/useAiRecoveryPoll";
+import { useRealtimeFaceAutoScan } from "../../lib/useRealtimeFaceAutoScan";
 import { calcDistanceMeters, cn, fmtDate, toMin, toWitaDate, toWitaTime, wita } from "../../lib/utils";
+
+const MAX_AUTO_ATTEMPTS = 3;
+const AUTO_RETRY_COOLDOWN_MS = 2500;
+const RETRYABLE_SCAN_ERROR_CODES = new Set([
+  "FACE_DETECTION_FAILED",
+  "LIVENESS_FAILED",
+  "FACE_MISMATCH",
+]);
 
 const STEPS = [
   "Mengambil gambar",
@@ -83,11 +93,18 @@ export default function ResidentScan() {
   const [profile, setProfile] = useState<ResidentProfileDto | null>(null);
   const [active, setActive] = useState<SessionDto | null>(null);
   const [aiAvailable, setAiAvailable] = useState<boolean>(true);
+  const [aiStarting, setAiStarting] = useState<boolean>(false);
   const [camAccess, setCamAccess] = useState<CamAccessState>("loading");
   const [loadingInit, setLoadingInit] = useState(true);
   const [step, setStep] = useState(-1);
   const [res, setRes] = useState<Res | null>(null);
   const [sendingHelp, setSendingHelp] = useState(false);
+
+  const [autoMode, setAutoMode] = useState(true);
+  const [autoAttempts, setAutoAttempts] = useState(0);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [cooldownSec, setCooldownSec] = useState(0);
+  const [autoRetryNote, setAutoRetryNote] = useState<string | null>(null);
 
   const [gpsState, setGpsState] = useState<{
     loading: boolean;
@@ -116,11 +133,12 @@ export default function ResidentScan() {
       const [prof, actSess, aiStat] = await Promise.all([
         residentsApi.getMyProfile(),
         schedulesApi.getActiveSession(),
-        attendanceApi.getAiStatus().catch(() => ({ available: false, healthy: false, service: "AI", status: "OFFLINE" })),
+        attendanceApi.getAiStatus().catch(() => ({ available: false, healthy: false, starting: false, service: "AI", status: "OFFLINE" })),
       ]);
       setProfile(prof);
       setActive(actSess);
       setAiAvailable(Boolean(aiStat.available && aiStat.healthy));
+      setAiStarting(Boolean(aiStat.starting || aiStat.status === "STARTING"));
     } catch {
       // Ditangani pada tampilan di bawah
     } finally {
@@ -131,6 +149,13 @@ export default function ResidentScan() {
   useEffect(() => {
     void loadInit();
   }, [loadInit]);
+
+  const handleAiStatus = useCallback((online: boolean, starting: boolean) => {
+    setAiAvailable(online);
+    setAiStarting(starting);
+  }, []);
+
+  useAiRecoveryPoll(!loadingInit && !aiAvailable, handleAiStatus);
 
   const isGeoActive = Boolean(active?.geofence?.isEnabled ?? active?.isGeoEnabled);
   const activeLat = active?.geofence?.latitude ?? active?.geoLatitude ?? null;
@@ -165,11 +190,43 @@ export default function ResidentScan() {
   const hasFace = Boolean(profile?.hasActiveFaceProfile);
   const cam: CamState = res ? (res.ok ? "ok" : "fail") : step >= 0 ? "scanning" : "idle";
   const canScan = hasFace && isResidentActive && Boolean(active) && camAccess === "on" && aiAvailable;
+  const gpsReadyForAutoScan = !isGeoActive || (!gpsState.loading && isInsideRadius === true);
+  const autoScanEnabled =
+    autoMode &&
+    canScan &&
+    !loadingInit &&
+    !res &&
+    step < 0 &&
+    gpsReadyForAutoScan &&
+    cooldownSec === 0 &&
+    autoAttempts < MAX_AUTO_ATTEMPTS;
 
-  const run = async () => {
+  useEffect(() => {
+    if (!cooldownUntil) {
+      setCooldownSec(0);
+      return;
+    }
+    const tick = () => {
+      const diff = cooldownUntil - Date.now();
+      if (diff <= 0) {
+        setCooldownUntil(null);
+        setCooldownSec(0);
+      } else {
+        setCooldownSec(Math.ceil(diff / 1000));
+      }
+    };
+    tick();
+    const timer = window.setInterval(tick, 250);
+    return () => window.clearInterval(timer);
+  }, [cooldownUntil]);
+
+  const run = async (isAutoAttempt = false) => {
     if (busy.current || !active) return;
     busy.current = true;
     setRes(null);
+    if (!isAutoAttempt) {
+      setAutoRetryNote(null);
+    }
     const t0 = performance.now();
 
     try {
@@ -232,6 +289,9 @@ export default function ResidentScan() {
       });
 
       const serverMs = scanResult.stageLatenciesMs?.totalLatencyMs ?? Math.round(performance.now() - t0);
+      setAutoAttempts(0);
+      setAutoRetryNote(null);
+      setCooldownUntil(null);
       setStep(5);
       setRes({
         ok: true,
@@ -243,6 +303,20 @@ export default function ResidentScan() {
     } catch (err) {
       const elapsed = Math.round(performance.now() - t0);
       if (isApiError(err)) {
+        const nextAttempt = isAutoAttempt ? autoAttempts + 1 : autoAttempts;
+        const canAutoRetry =
+          isAutoAttempt &&
+          RETRYABLE_SCAN_ERROR_CODES.has(err.code) &&
+          nextAttempt < MAX_AUTO_ATTEMPTS;
+
+        if (canAutoRetry) {
+          setAutoAttempts(nextAttempt);
+          setAutoRetryNote(err.message);
+          setCooldownUntil(Date.now() + AUTO_RETRY_COOLDOWN_MS);
+          setStep(-1);
+          return;
+        }
+
         if (err.code === "LIVENESS_FAILED") {
           setStep(1);
           setRes({
@@ -263,7 +337,7 @@ export default function ResidentScan() {
             ms: elapsed,
             failedAt: 2,
           });
-        } else if (err.code === "OUTSIDE_GEOFENCE" || err.code === "LOCATION_REQUIRED") {
+        } else if (err.code === "OUTSIDE_GEOFENCE" || err.code === "LOCATION_REQUIRED" || err.code === "GPS_LOCATION_REQUIRED") {
           setStep(3);
           setRes({
             ok: false,
@@ -273,11 +347,11 @@ export default function ResidentScan() {
             ms: elapsed,
             failedAt: 3,
           });
-        } else if (err.code === "NO_ACTIVE_SESSION") {
+        } else if (err.code === "NO_ACTIVE_SESSION" || err.code === "SESSION_CLOSED") {
           setStep(3);
           setRes({
             ok: false,
-            title: "Tidak ada sesi presensi aktif",
+            title: err.code === "SESSION_CLOSED" ? "Sesi presensi sudah ditutup" : "Tidak ada sesi presensi aktif",
             text: err.message,
             icon: CalendarX2,
             ms: elapsed,
@@ -330,6 +404,17 @@ export default function ResidentScan() {
     }
   };
 
+  const runRef = useRef(run);
+  runRef.current = run;
+
+  const faceGuide = useRealtimeFaceAutoScan({
+    enabled: autoScanEnabled,
+    getVideo: useCallback(() => vfRef.current?.getVideoElement() ?? null, []),
+    onReadyToCapture: useCallback(() => {
+      void runRef.current(true);
+    }, []),
+  });
+
   const requestHelp = async () => {
     if (sendingHelp) return;
     setSendingHelp(true);
@@ -351,13 +436,18 @@ export default function ResidentScan() {
   const reset = () => {
     setRes(null);
     setStep(-1);
+    setAutoAttempts(0);
+    setCooldownUntil(null);
+    setAutoRetryNote(null);
   };
 
   const label = useMemo(() => {
     if (res) return res.ok ? "Terverifikasi" : "Ditolak";
     if (step >= 0) return STEPS[Math.min(step, STEPS.length - 1)] + "…";
+    if (cooldownSec > 0) return `Atur ulang posisi wajah (${cooldownSec} dtk)…`;
+    if (autoScanEnabled) return faceGuide.hint;
     return "Posisikan wajah di dalam bingkai";
-  }, [res, step]);
+  }, [res, step, cooldownSec, autoScanEnabled, faceGuide.hint]);
 
   if (!loadingInit && (!hasFace || !isResidentActive)) {
     return (
@@ -398,7 +488,7 @@ export default function ResidentScan() {
       />
 
       {!aiAvailable && (
-        <Card className="mb-3 flex items-start gap-2.5 !bg-warning-soft p-3.5 text-xs text-warning">
+        <Card glass={false} className="mb-3 flex items-start gap-2.5 !bg-warning-soft p-3.5 text-xs text-warning">
           <WifiOff className="mt-0.5 size-4 shrink-0" aria-hidden />
           <div className="flex-1">
             <p className="font-semibold">Layanan AI pengenalan wajah sedang tidak dapat dihubungi</p>
@@ -429,7 +519,7 @@ export default function ResidentScan() {
           </Badge>
         )}
         <Badge tone={aiAvailable ? "info" : "warning"}>
-          {aiAvailable ? "ArcFace + PAD" : "AI Offline"}
+          {aiAvailable ? "ArcFace + PAD" : aiStarting ? "Menyalakan AI…" : "AI Offline"}
         </Badge>
       </div>
 
@@ -495,7 +585,14 @@ export default function ResidentScan() {
         </div>
       )}
 
-      <Viewfinder ref={vfRef} state={cam} label={label} onCameraStateChange={setCamAccess} />
+      <Viewfinder
+        ref={vfRef}
+        state={cam}
+        label={label}
+        aligned={autoScanEnabled && faceGuide.aligned}
+        alignProgress={autoScanEnabled ? faceGuide.progress : 0}
+        onCameraStateChange={setCamAccess}
+      />
 
       <AnimatePresence mode="wait">
         {!res ? (
@@ -506,27 +603,99 @@ export default function ResidentScan() {
               </div>
             ) : (
               <>
-                <Button
-                  block
-                  size="lg"
-                  onClick={() => void run()}
-                  disabled={!canScan || loadingInit || (isGeoActive && isInsideRadius === false)}
-                  icon={<ScanFace className="size-5" />}
-                >
-                  {camAccess === "off"
-                    ? "Kamera tidak tersedia"
-                    : !active
-                      ? "Tidak ada sesi presensi aktif"
-                      : isGeoActive && isInsideRadius === false
-                        ? `Di luar radius (${geoDistance} m > ${activeRadius} m)`
-                        : "Pindai wajah"}
-                </Button>
+                {(autoRetryNote || cooldownSec > 0) && (
+                  <div className="mb-3 rounded-2xl border border-amber-400/40 bg-amber-50/90 px-4 py-3 text-xs text-amber-900 shadow-sm dark:border-amber-500/30 dark:bg-amber-950/50 dark:text-amber-200">
+                    <div className="flex items-center justify-between gap-2 font-semibold">
+                      <span>
+                        Percobaan otomatis {Math.min(autoAttempts, MAX_AUTO_ATTEMPTS)}/{MAX_AUTO_ATTEMPTS}
+                      </span>
+                      {cooldownSec > 0 && <span className="tabular-nums">Siap ulang {cooldownSec} dtk</span>}
+                    </div>
+                    {autoRetryNote && <p className="mt-1 leading-relaxed opacity-90">{autoRetryNote}</p>}
+                  </div>
+                )}
+
+                <div className="soft-inset mb-3 flex items-center justify-between gap-2 rounded-2xl p-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAutoMode(true);
+                      setAutoAttempts(0);
+                      setCooldownUntil(0);
+                      setAutoRetryNote(null);
+                    }}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                      autoMode
+                        ? "bg-emerald-500 text-white shadow-sm"
+                        : "text-slate-600 hover:bg-slate-100/80 dark:text-slate-300 dark:hover:bg-white/10"
+                    }`}
+                  >
+                    <Sparkles className="size-3.5" />
+                    Auto-Scan Real-Time
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAutoMode(false);
+                      setCooldownUntil(0);
+                      setAutoRetryNote(null);
+                    }}
+                    className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                      !autoMode
+                        ? "bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-900"
+                        : "text-slate-600 hover:bg-slate-100/80 dark:text-slate-300 dark:hover:bg-white/10"
+                    }`}
+                  >
+                    <ScanFace className="size-3.5" />
+                    Mode Manual
+                  </button>
+                </div>
+
+                {autoMode && canScan && faceGuide.status !== "detector_error" && autoAttempts < MAX_AUTO_ATTEMPTS && !(isGeoActive && isInsideRadius === false) ? (
+                  <Button
+                    block
+                    variant="glass"
+                    size="md"
+                    onClick={() => void run(false)}
+                    disabled={loadingInit}
+                    icon={<ScanFace className="size-4" />}
+                  >
+                    Pindai manual sekarang
+                  </Button>
+                ) : (
+                  <Button
+                    block
+                    size="lg"
+                    onClick={() => void run(false)}
+                    disabled={!canScan || loadingInit || (isGeoActive && isInsideRadius === false)}
+                    icon={<ScanFace className="size-5" />}
+                  >
+                    {camAccess === "off"
+                      ? "Kamera tidak tersedia"
+                      : !active
+                        ? "Tidak ada sesi presensi aktif"
+                        : isGeoActive && isInsideRadius === false
+                          ? `Di luar radius (${geoDistance} m > ${activeRadius} m)`
+                          : "Pindai wajah"}
+                  </Button>
+                )}
+
                 <p className="mt-3 text-center text-xs text-muted">
-                  {canScan
-                    ? isGeoActive && isInsideRadius === false
+                  {!canScan
+                    ? "Auto-scan dan tombol aktif saat sesi presensi dibuka dan kamera siap."
+                    : isGeoActive && isInsideRadius === false
                       ? "Dekati lokasi asrama atau minta bantuan penjaga jika sinyal lemah (K-04)."
-                      : "Geofencing & liveness diperiksa sebelum pencocokan wajah."
-                    : "Tombol aktif saat sesi presensi dibuka dan kamera siap."}
+                      : !autoMode
+                        ? "Mode manual aktif. Tekan tombol pindai saat posisi wajah sudah pas."
+                        : faceGuide.status === "detector_error"
+                          ? "Detektor otomatis perangkat tidak aktif. Gunakan tombol Pindai wajah di atas."
+                          : autoAttempts >= MAX_AUTO_ATTEMPTS
+                            ? "Batas percobaan otomatis tercapai. Tekan Pindai wajah secara manual atau ubah pencahayaan."
+                            : !gpsReadyForAutoScan
+                              ? "Menunggu validasi GPS berada dalam radius asrama sebelum scan otomatis berjalan."
+                              : cooldownSec > 0
+                                ? `Menunggu ${cooldownSec} detik sebelum scan otomatis berikutnya...`
+                                : "Arahkan wajah ke dalam bingkai oval. Presensi tercatat otomatis saat wajah pas & stabil."}
                 </p>
               </>
             )}
@@ -568,9 +737,15 @@ export default function ResidentScan() {
                       : "Lokasi bebas (tanpa batas)",
                   ],
                   [
-                    "Skor / Liveness",
+                    "Tingkat Kecocokan",
                     res.scanData
-                      ? `${res.scanData.similarityScore.toFixed(2)} · ${(res.scanData.livenessScore * 100).toFixed(0)}%`
+                      ? `${Math.round(res.scanData.similarityScore * 100)}% cocok`
+                      : "Cocok",
+                  ],
+                  [
+                    "Terdeteksi Manusia",
+                    res.scanData
+                      ? `${Math.round(res.scanData.livenessScore * 100)}% asli`
                       : "Terverifikasi",
                   ],
                 ].map(([k, v]) => (

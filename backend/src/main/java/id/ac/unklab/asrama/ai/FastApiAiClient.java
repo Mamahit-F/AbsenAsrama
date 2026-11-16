@@ -4,6 +4,7 @@ import id.ac.unklab.asrama.ai.AiDtos.*;
 import id.ac.unklab.asrama.common.BusinessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -23,9 +24,21 @@ public class FastApiAiClient {
     private static final Logger log = LoggerFactory.getLogger(FastApiAiClient.class);
 
     private final RestClient aiRestClient;
+    private volatile AiAutoStartService aiAutoStartService;
 
     public FastApiAiClient(@Qualifier("aiRestClient") RestClient aiRestClient) {
         this.aiRestClient = aiRestClient;
+    }
+
+    @Autowired(required = false)
+    void setAiAutoStartService(AiAutoStartService aiAutoStartService) {
+        this.aiAutoStartService = aiAutoStartService;
+    }
+
+    private void triggerRecoveryIfAvailable() {
+        if (aiAutoStartService != null) {
+            aiAutoStartService.triggerStartIfOffline();
+        }
     }
 
     public AiPoseCheckResponse validateEnrollmentPose(AiPoseCheckRequest request) {
@@ -49,6 +62,7 @@ public class FastApiAiClient {
             return response;
         } catch (ResourceAccessException ex) {
             log.error("AI Service timeout/unreachable during pose validation: {}", ex.getMessage());
+            triggerRecoveryIfAvailable();
             throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "AI_SERVICE_UNAVAILABLE",
                     "Layanan AI (FastAPI) tidak dapat dihubungi atau melebihi batas waktu (timeout)");
         } catch (RestClientResponseException ex) {
@@ -77,6 +91,7 @@ public class FastApiAiClient {
             return response;
         } catch (ResourceAccessException ex) {
             log.error("AI Service timeout/unreachable during embedding extraction: {}", ex.getMessage());
+            triggerRecoveryIfAvailable();
             throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "AI_SERVICE_UNAVAILABLE",
                     "Layanan AI (FastAPI) tidak dapat dihubungi saat pembentukan embedding wajah");
         } catch (RestClientResponseException ex) {
@@ -107,6 +122,7 @@ public class FastApiAiClient {
             return response;
         } catch (ResourceAccessException ex) {
             log.error("AI Service timeout/unreachable during attendance scan: {}", ex.getMessage());
+            triggerRecoveryIfAvailable();
             throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "AI_SERVICE_UNAVAILABLE",
                     "Layanan AI (FastAPI) tidak dapat dihubungi atau melebihi batas waktu saat pemindaian wajah");
         } catch (RestClientResponseException ex) {
@@ -122,9 +138,14 @@ public class FastApiAiClient {
                     .uri("/health")
                     .retrieve()
                     .toBodilessEntity();
-            return response.getStatusCode().is2xxSuccessful();
+            if (response.getStatusCode().is2xxSuccessful()) {
+                return true;
+            }
+            triggerRecoveryIfAvailable();
+            return false;
         } catch (Exception ex) {
             log.debug("FastAPI health check failed: {}", ex.getMessage());
+            triggerRecoveryIfAvailable();
             return false;
         }
     }

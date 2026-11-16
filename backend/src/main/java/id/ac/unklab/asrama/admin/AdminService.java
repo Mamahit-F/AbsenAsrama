@@ -72,14 +72,19 @@ public class AdminService {
             throw BusinessException.conflict("NIM_ALREADY_EXISTS",
                     "Penghuni dengan NIM " + request.nim().trim() + " sudah terdaftar");
         }
+        // Admin tidak menetapkan Hall penghuni; penempatan Hall dikelola Penjaga Hall.
         UUID id = adminRepository.insertResident(
                 request.nim(),
                 request.fullName(),
                 request.status() != null ? request.status() : ResidentStatus.AKTIF,
                 request.residenceCategory() != null ? request.residenceCategory() : ResidenceCategory.ASRAMA,
                 request.building(),
-                request.roomNumber()
+                request.roomNumber(),
+                null
         );
+        // A-02: Otomatis buatkan akun user login penghuni dengan password default "11111111"
+        String defaultPasswordHash = passwordEncoder.encode("11111111");
+        adminRepository.insertResidentUserAccount(id, request.nim(), defaultPasswordHash);
         return residentRepository.findById(id).orElseThrow();
     }
 
@@ -94,6 +99,7 @@ public class AdminService {
             });
         }
 
+        // Admin tidak menentukan atau mengubah Hall penghuni; pertahankan penempatan Hall dari Penjaga Hall.
         adminRepository.updateResident(
                 residentId,
                 request.nim(),
@@ -101,7 +107,8 @@ public class AdminService {
                 request.status(),
                 request.residenceCategory(),
                 request.building(),
-                request.roomNumber()
+                request.roomNumber(),
+                current.hallName()
         );
         return residentRepository.findById(residentId).orElseThrow();
     }
@@ -204,6 +211,7 @@ public class AdminService {
                 }
 
                 Optional<ResidentProfileDto> existing = residentRepository.findByNim(nim);
+                String defaultPasswordHash = passwordEncoder.encode("11111111");
                 if (existing.isPresent()) {
                     adminRepository.updateResident(
                             existing.get().id(),
@@ -214,9 +222,11 @@ public class AdminService {
                             building,
                             roomNumber
                     );
+                    adminRepository.insertResidentUserAccount(existing.get().id(), nim, defaultPasswordHash);
                     updated++;
                 } else {
-                    adminRepository.insertResident(nim, fullName, status, category, building, roomNumber);
+                    UUID newResidentId = adminRepository.insertResident(nim, fullName, status, category, building, roomNumber);
+                    adminRepository.insertResidentUserAccount(newResidentId, nim, defaultPasswordHash);
                     inserted++;
                 }
             }
@@ -243,9 +253,33 @@ public class AdminService {
             throw BusinessException.badRequest("INVALID_STAFF_ROLE",
                     "Akun PENGHUNI wajib didaftarkan melalui registrasi penghuni dengan NIM resmi");
         }
+        String normalizedHall = normalizeOptionalHall(request.hallName());
         String hash = passwordEncoder.encode(request.password());
-        UUID userId = adminRepository.insertStaffUser(request.username(), request.email(), hash, request.role());
+        UUID userId = adminRepository.insertStaffUser(request.username(), request.email(), hash, request.role(), normalizedHall);
         return adminRepository.findUserAccountById(userId).orElseThrow();
+    }
+
+    @Transactional
+    public UserAccountDto updateUserHall(UUID userId, String hallName) {
+        adminRepository.findUserAccountById(userId)
+                .orElseThrow(() -> BusinessException.notFound("USER_NOT_FOUND", "Akun pengguna tidak ditemukan"));
+        String normalizedHall = normalizeOptionalHall(hallName);
+        adminRepository.updateUserHall(userId, normalizedHall);
+        if (jwtTokenService != null) {
+            jwtTokenService.revokeAllUserTokens(userId);
+        }
+        return adminRepository.findUserAccountById(userId).orElseThrow();
+    }
+
+    private String normalizeOptionalHall(String hallName) {
+        if (hallName == null || hallName.isBlank()) {
+            return null;
+        }
+        String trimmed = hallName.trim();
+        if (!Set.of("Hall A1", "Hall B1", "Hall A2", "Hall B2").contains(trimmed)) {
+            throw BusinessException.badRequest("INVALID_HALL", "Hall harus salah satu dari: Hall A1, Hall B1, Hall A2, Hall B2");
+        }
+        return trimmed;
     }
 
     @Transactional
@@ -261,9 +295,25 @@ public class AdminService {
 
     @Transactional
     public void resetUserPassword(UUID userId, ResetUserPasswordRequest request) {
-        adminRepository.findUserAccountById(userId)
+        UserAccountDto target = adminRepository.findUserAccountById(userId)
                 .orElseThrow(() -> BusinessException.notFound("USER_NOT_FOUND", "Akun pengguna tidak ditemukan"));
-        String hash = passwordEncoder.encode(request.newPassword());
+        String passwordToEncode;
+        if (target.role() == UserRole.PENGHUNI || target.role() == UserRole.MONITOR) {
+            if (request != null && request.newPassword() != null && !request.newPassword().isBlank()
+                    && !"11111111".equals(request.newPassword())) {
+                throw BusinessException.badRequest(
+                        "CUSTOM_PASSWORD_RESET_FORBIDDEN",
+                        "Kata sandi penghuni dan penjaga hanya dapat di-reset ke kata sandi default (11111111)"
+                );
+            }
+            passwordToEncode = "11111111";
+        } else {
+            if (request == null || request.newPassword() == null || request.newPassword().isBlank()) {
+                throw BusinessException.badRequest("INVALID_PASSWORD", "Password baru wajib diisi");
+            }
+            passwordToEncode = request.newPassword();
+        }
+        String hash = passwordEncoder.encode(passwordToEncode);
         adminRepository.resetUserPassword(userId, hash);
         if (jwtTokenService != null) {
             jwtTokenService.revokeAllUserTokens(userId);
@@ -279,6 +329,30 @@ public class AdminService {
             jwtTokenService.revokeAllUserTokens(userId);
         }
         return adminRepository.findUserAccountById(userId).orElseThrow();
+    }
+
+    @Transactional
+    public void deleteUser(UUID userId, UUID actorUserId) {
+        UserAccountDto target = adminRepository.findUserAccountById(userId)
+                .orElseThrow(() -> BusinessException.notFound("USER_NOT_FOUND", "Akun pengguna tidak ditemukan"));
+        if (actorUserId != null && actorUserId.equals(userId)) {
+            throw BusinessException.badRequest("CANNOT_DELETE_SELF", "Anda tidak dapat menghapus akun Anda sendiri yang sedang digunakan");
+        }
+        if (target.residentId() != null) {
+            if (jwtTokenService != null) {
+                jwtTokenService.revokeAllUserTokens(userId);
+            }
+            deleteResidentWithRetentionPolicy(target.residentId());
+            return;
+        }
+        if (target.role() == UserRole.ADMIN && target.isActive() && adminRepository.countActiveAdmins() <= 1) {
+            throw BusinessException.badRequest("CANNOT_DELETE_LAST_ADMIN", "Minimal harus tersisa satu akun Administrator aktif");
+        }
+        if (jwtTokenService != null) {
+            jwtTokenService.revokeAllUserTokens(userId);
+        }
+        adminRepository.deleteUser(userId);
+        log.info("Deleted staff user account: userId={}, username={}", userId, target.username());
     }
 
     private String getColumn(CSVRecord record, String... candidateNames) {

@@ -13,6 +13,8 @@ export interface ReportFilterParams {
   to?: string;
   sessionId?: string;
   status?: AttendanceStatus;
+  format?: "structured" | "raw";
+  sep?: ";" | ",";
 }
 
 export const reportsApi = {
@@ -32,6 +34,8 @@ export const reportsApi = {
       to: params.to,
       sessionId: params.sessionId,
       status: params.status,
+      format: params.format,
+      sep: params.sep,
     });
     return apiDownloadBlob(`/reports/attendance/export-csv${q}`);
   },

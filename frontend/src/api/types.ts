@@ -1,6 +1,6 @@
 // Tipe data domain & DTO sesuai kontrak Java Backend Spring Boot (id.ac.unklab.asrama.*)
 
-export type UserRole = "PENGHUNI" | "MONITOR" | "ADMIN" | "VILLAGE_DEAN";
+export type UserRole = "PENGHUNI" | "MONITOR" | "ADMIN";
 export type ResidentStatus = "AKTIF" | "NONAKTIF";
 export type ResidenceCategory = "ASRAMA" | "LUAR_DEKAT" | "LUAR_JAUH";
 export type EnrollmentStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
@@ -27,13 +27,6 @@ export interface ApiEnvelope<T> {
 }
 
 // 01. AuthDtos
-export interface RegisterResidentRequest {
-  nim: string;
-  fullName: string;
-  password: string;
-  email?: string;
-}
-
 export interface LoginRequest {
   identifier: string;
   password: string;
@@ -48,8 +41,11 @@ export interface LogoutRequest {
 }
 
 export interface ChangePasswordRequest {
-  currentPassword: string;
-  newPassword: string;
+  old_password?: string;
+  new_password?: string;
+  confirm_password?: string;
+  currentPassword?: string;
+  newPassword?: string;
 }
 
 export interface UserSessionDto {
@@ -60,6 +56,7 @@ export interface UserSessionDto {
   residentId: string | null;
   residentStatus: ResidentStatus | null;
   isActive: boolean;
+  hallName?: string | null;
 }
 
 export interface AuthTokenResponse {
@@ -83,8 +80,13 @@ export interface ResidentProfileDto {
   faceEnrolledAt: string | null;
   hasActiveConsent: boolean;
   activeConsentVersion: string | null;
+  hallName?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ClaimHallRequest {
+  nim: string;
 }
 
 export interface ConsentRequest {
@@ -242,6 +244,7 @@ export interface ScheduleDto {
   status: ScheduleStatus;
   description: string | null;
   createdBy: string | null;
+  hallName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -250,6 +253,16 @@ export interface CreateSessionRequest {
   scheduleId: string;
   startsAt: string;
   endsAt: string;
+  hallName?: string | null;
+}
+
+export interface UpdateSessionRequest {
+  name?: string;
+  startsAt?: string;
+  endsAt?: string;
+  status?: SessionStatus;
+  hallName?: string | null;
+  geofence?: GeofenceConfigRequest;
 }
 
 export interface MaterializeSessionsRequest {
@@ -292,6 +305,7 @@ export interface SessionDto {
   geoLatitude?: number | null;
   geoLongitude?: number | null;
   geoRadiusMeters?: number | null;
+  hallName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -425,6 +439,7 @@ export interface DashboardStatsDto {
 export interface AiStatusDto {
   available: boolean;
   healthy: boolean;
+  starting?: boolean;
   service: string;
   status: string;
 }
@@ -437,6 +452,7 @@ export interface CreateResidentRequest {
   residenceCategory?: ResidenceCategory;
   building?: string;
   roomNumber?: string;
+  hallName?: string | null;
 }
 
 export interface UpdateResidentRequest {
@@ -446,6 +462,7 @@ export interface UpdateResidentRequest {
   residenceCategory: ResidenceCategory;
   building?: string;
   roomNumber?: string;
+  hallName?: string | null;
 }
 
 export interface CsvRowValidationError {
@@ -467,6 +484,7 @@ export interface CreateStaffUserRequest {
   email?: string;
   password: string;
   role: UserRole;
+  hallName?: string | null;
 }
 
 export interface UserAccountDto {
@@ -481,6 +499,7 @@ export interface UserAccountDto {
   failedLoginAttempts: number;
   lockedUntil: string | null;
   lastLoginAt: string | null;
+  hallName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -537,6 +556,7 @@ export interface AttendanceReportRowDto {
   residenceCategory: string | null;
   building: string | null;
   roomNumber: string | null;
+  hallName?: string | null;
   status: AttendanceStatus;
   method: AttendanceMethod;
   reason: string | null;
@@ -616,4 +636,8 @@ export interface AttendanceRecordHistoryDto {
   changedByUsername: string | null;
   correctionReason: string | null;
   changedAt: string;
+}
+
+export interface ScheduleSettingsDto {
+  maxDailySessions: number;
 }

@@ -18,19 +18,22 @@ export interface ViewfinderHandle {
   captureFrame: (quality?: number) => Promise<Blob | null>;
   retryCamera: () => void;
   getAccessState: () => CamAccessState;
+  getVideoElement: () => HTMLVideoElement | null;
 }
 
 export interface ViewfinderProps {
   state?: CamState;
   pose?: string;
   label?: string;
+  aligned?: boolean;
+  alignProgress?: number;
   children?: ReactNode;
   onCameraStateChange?: (accessState: CamAccessState) => void;
 }
 
 /** Webcam viewfinder with face guide and real JPEG frame capture via canvas. */
 export const Viewfinder = forwardRef<ViewfinderHandle, ViewfinderProps>(function Viewfinder(
-  { state = "idle", pose, label, children, onCameraStateChange },
+  { state = "idle", pose, label, aligned = false, alignProgress = 0, children, onCameraStateChange },
   ref,
 ) {
   const video = useRef<HTMLVideoElement>(null);
@@ -134,17 +137,19 @@ export const Viewfinder = forwardRef<ViewfinderHandle, ViewfinderProps>(function
       captureFrame,
       retryCamera,
       getAccessState: () => cam,
+      getVideoElement: () => video.current,
     }),
     [cam, captureFrame, retryCamera],
   );
 
+  const clampedAlign = Math.max(0, Math.min(1, alignProgress));
   const ring =
     state === "ok"
       ? "#34d399"
       : state === "fail"
         ? "#f87171"
-        : state === "scanning"
-          ? "#e879f9"
+        : state === "scanning" || aligned
+          ? "#3CC4AE"
           : "rgba(255,255,255,.85)";
   const Arrow = { kiri: ArrowLeft, kanan: ArrowRight, atas: ArrowUp, bawah: ArrowDown }[pose ?? ""];
 
@@ -199,11 +204,27 @@ export const Viewfinder = forwardRef<ViewfinderHandle, ViewfinderProps>(function
             rx="98"
             ry="128"
             fill="none"
-            strokeWidth="3"
-            strokeDasharray={state === "idle" ? "6 8" : "0"}
+            strokeWidth={aligned && state === "idle" ? "3.5" : "3"}
+            strokeDasharray={state === "idle" && !aligned ? "6 8" : "0"}
             animate={{ stroke: ring }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.25 }}
           />
+          {state === "idle" && clampedAlign > 0 && (
+            <ellipse
+              cx="150"
+              cy="185"
+              rx="98"
+              ry="128"
+              fill="none"
+              stroke="#34d399"
+              strokeWidth="4.5"
+              strokeLinecap="round"
+              pathLength={100}
+              strokeDasharray="100"
+              strokeDashoffset={100 - clampedAlign * 100}
+              className="transition-[stroke-dashoffset] duration-100 ease-linear"
+            />
+          )}
         </svg>
 
         {/* viewfinder corner brackets */}
@@ -234,12 +255,12 @@ export const Viewfinder = forwardRef<ViewfinderHandle, ViewfinderProps>(function
               exit={{ opacity: 0 }}
             >
               <motion.div
-                className="absolute left-1/2 top-[46%] h-[64%] w-[65%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border-2 border-[#c084fc]"
+                className="absolute left-1/2 top-[46%] h-[64%] w-[65%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border-2 border-[#3CC4AE]"
                 animate={{ scale: [1, 1.08], opacity: [0.7, 0] }}
                 transition={{ duration: 1.2, repeat: Infinity, ease: "easeOut" }}
               />
               <div className="absolute inset-x-[17%] top-[14%] h-[64%] overflow-hidden rounded-[50%]">
-                <div className="scan-sweep h-14 w-full bg-gradient-to-b from-transparent via-[#e879f9]/60 to-transparent" />
+                <div className="scan-sweep h-14 w-full bg-gradient-to-b from-transparent via-[#3CC4AE]/60 to-transparent" />
               </div>
             </motion.div>
           )}

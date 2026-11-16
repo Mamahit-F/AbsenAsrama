@@ -31,6 +31,28 @@ public class SecurityUtils {
         return getCurrentPrincipal().residentId();
     }
 
+    public String getCurrentHallName() {
+        return getCurrentPrincipal().hallName();
+    }
+
+    public boolean hasRole(UserRole role) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !(auth.getPrincipal() instanceof AppPrincipal principal)) {
+            return false;
+        }
+        return principal.role() == role;
+    }
+
+    public boolean hasRole(String roleName) {
+        if (roleName == null) return false;
+        String clean = roleName.startsWith("ROLE_") ? roleName.substring(5) : roleName;
+        try {
+            return hasRole(UserRole.valueOf(clean));
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
     public void assertResidentOwnershipOrStaff(UUID targetResidentId) {
         AppPrincipal principal = getCurrentPrincipal();
         if (principal.role() == UserRole.PENGHUNI) {

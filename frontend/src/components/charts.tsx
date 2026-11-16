@@ -13,12 +13,12 @@ export function Ring({ value, size = 96, stroke = 10, dark, children }: { value:
       <svg width={size} height={size} className="-rotate-90" aria-hidden>
         <defs>
           <linearGradient id={`rg-${id}`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#e879f9" />
-            <stop offset="0.55" stopColor="#8b5cf6" />
-            <stop offset="1" stopColor="#312e81" />
+            <stop offset="0" stopColor="#3CC4AE" />
+            <stop offset="0.52" stopColor="#0E8F7E" />
+            <stop offset="1" stopColor="#0A5C51" />
           </linearGradient>
         </defs>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={dark ? "rgba(255,255,255,.12)" : "#d6d8e9"} strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--ring-track, #d6d8e9)" strokeWidth={stroke} />
         <motion.circle
           cx={size / 2}
           cy={size / 2}
@@ -28,9 +28,8 @@ export function Ring({ value, size = 96, stroke = 10, dark, children }: { value:
           strokeWidth={stroke}
           strokeLinecap="round"
           initial={{ pathLength: 0 }}
-          whileInView={{ pathLength: Math.max(0.001, value) }}
-          viewport={{ once: true }}
-          transition={{ duration: 1.3, ease: easeOut, delay: 0.1 }}
+          animate={{ pathLength: Math.max(0.001, value) }}
+          transition={{ duration: 0.75, ease: easeOut, delay: 0.05 }}
         />
       </svg>
       {inner > 20 && (
@@ -39,8 +38,8 @@ export function Ring({ value, size = 96, stroke = 10, dark, children }: { value:
           style={{
             width: inner,
             height: inner,
-            background: dark ? "radial-gradient(circle at 35% 30%, #34318a, #1a1844)" : "linear-gradient(145deg,#f6f6fc,#e3e4ef)",
-            boxShadow: dark ? "inset 0 2px 0 rgba(255,255,255,.1), 0 8px 18px -8px rgba(0,0,0,.6)" : "var(--sh-raise-sm)",
+            background: dark ? "var(--ring-inner-bg, linear-gradient(145deg,#f6f6fc,#e3e4ef))" : "var(--ring-inner-bg, linear-gradient(145deg,#f6f6fc,#e3e4ef))",
+            boxShadow: "var(--icon-well-shadow, var(--sh-raise-sm))",
           }}
           aria-hidden
         />
@@ -75,9 +74,8 @@ export function MetricBar({ label, value, target, unit = "%", lowerIsBetter = tr
           className="absolute inset-y-0 left-0 rounded-full"
           style={{ background: pass ? "var(--grad-accent)" : "linear-gradient(90deg,#fb7185,#be123c)" }}
           initial={{ width: 0 }}
-          whileInView={{ width: `${pct}%` }}
-          viewport={{ once: true }}
-          transition={{ duration: 1, ease: easeOut }}
+          animate={{ width: `${pct}%` }}
+          transition={{ duration: 0.65, ease: easeOut }}
         />
         <span className="absolute -top-1 h-5 w-0.5 rounded-full bg-foreground/50" style={{ left: `${(target / max) * 100}%` }} aria-hidden />
       </div>

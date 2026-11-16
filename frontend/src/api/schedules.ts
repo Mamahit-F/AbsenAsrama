@@ -10,10 +10,12 @@ import type {
   MaterializeSessionsRequest,
   ScheduleDto,
   ScheduleHistoryEntryDto,
+  ScheduleSettingsDto,
   ScheduleStatus,
   SessionDto,
   SessionStatus,
   UpdateScheduleRequest,
+  UpdateSessionRequest,
 } from "./types";
 
 export const schedulesApi = {
@@ -50,6 +52,12 @@ export const schedulesApi = {
     });
   },
 
+  async deleteSchedule(scheduleId: string): Promise<void> {
+    return apiRequest<void>(`/schedules/${scheduleId}`, {
+      method: "DELETE",
+    });
+  },
+
   async materializeSessions(
     scheduleId: string,
     payload: MaterializeSessionsRequest,
@@ -74,7 +82,10 @@ export const schedulesApi = {
     try {
       return await apiRequest<SessionDto>("/schedules/sessions/active", { method: "GET" });
     } catch (err) {
-      if (isApiError(err) && (err.code === "NO_ACTIVE_SESSION" || err.status === 404)) {
+      if (
+        isApiError(err) &&
+        (err.code === "NO_ACTIVE_SESSION" || err.code === "HALL_UNASSIGNED" || err.status === 404)
+      ) {
         return null;
       }
       throw err;
@@ -84,6 +95,13 @@ export const schedulesApi = {
   async createSession(payload: CreateSessionRequest): Promise<SessionDto> {
     return apiRequest<SessionDto>("/schedules/sessions", {
       method: "POST",
+      body: payload,
+    });
+  },
+
+  async updateSession(sessionId: string, payload: UpdateSessionRequest): Promise<SessionDto> {
+    return apiRequest<SessionDto>(`/schedules/sessions/${sessionId}`, {
+      method: "PUT",
       body: payload,
     });
   },
@@ -128,5 +146,9 @@ export const schedulesApi = {
       method: "POST",
       body: payload,
     });
+  },
+
+  async getScheduleSettings(): Promise<ScheduleSettingsDto> {
+    return apiRequest<ScheduleSettingsDto>("/schedules/settings", { method: "GET" });
   },
 };

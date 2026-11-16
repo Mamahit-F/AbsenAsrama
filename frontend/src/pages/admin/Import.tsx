@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2, FileUp, Sparkles, XCircle } from "lucide-react";
+import { CheckCircle2, FileUp, KeyRound, Sparkles, XCircle } from "lucide-react";
 import { Page, TopBar } from "../../components/layout";
 import { Badge, Button, Card, Item, SectionTitle, Stagger, TextArea } from "../../components/ui";
 import { adminApi, isApiError, residentsApi, type CsvImportSummaryDto, type ResidentProfileDto } from "../../api";
@@ -138,9 +138,16 @@ export default function ImportCsv() {
 
   return (
     <Page nav={false}>
-      <TopBar back="/admin/penghuni" title="Impor CSV penghuni" sub="Validasi tiap baris sebelum simpan" />
+      <TopBar back="/admin/pengguna?role=PENGHUNI" title="Impor CSV penghuni" sub="Validasi tiap baris sebelum simpan" />
 
       <Stagger>
+        <Item className="soft-inset mb-3 flex items-start gap-2.5 rounded-2xl p-3.5 text-xs text-muted">
+          <KeyRound className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+          <span>
+            <strong>Akun Login Otomatis (A-02):</strong> Setiap penghuni baru yang diimpor melalui CSV otomatis dibuatkan akun login dengan username <strong>NIM</strong> dan kata sandi awal default <strong>11111111</strong>.
+          </span>
+        </Item>
+
         <Card className="space-y-3.5 p-4">
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted">Format: nim,full_name,building,room_number</span>
@@ -162,20 +169,20 @@ export default function ImportCsv() {
             hint="Unggah berkas .csv atau tempel baris dengan format NIM,Nama Lengkap."
           />
 
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="soft-inset rounded-2xl p-2.5">
+          <div className="grid grid-cols-3 divide-x divide-line border-y border-line py-2.5 text-center">
+            <div className="px-2">
               <p className="font-display text-base font-semibold tabular">
                 {summary ? summary.totalRowsProcessed : validation.length}
               </p>
               <p className="text-[11px] font-semibold text-muted">Total baris</p>
             </div>
-            <div className="soft-inset rounded-2xl p-2.5">
+            <div className="px-2">
               <p className="font-display text-base font-semibold text-success tabular">
                 {summary ? summary.insertedCount + summary.updatedCount : validRows.length}
               </p>
               <p className="text-[11px] font-semibold text-muted">Berhasil validasi</p>
             </div>
-            <div className="soft-inset rounded-2xl p-2.5">
+            <div className="px-2">
               <p className="font-display text-base font-semibold text-danger tabular">
                 {summary ? summary.rejectedCount : invalidRows.length}
               </p>
@@ -204,7 +211,7 @@ export default function ImportCsv() {
               <p className="text-center">
                 Impor selesai: {summary.insertedCount} ditambahkan, {summary.updatedCount} diperbarui,{" "}
                 {summary.rejectedCount} ditolak.{" "}
-                <button onClick={() => nav("/admin/penghuni")} className="underline">
+                <button onClick={() => nav("/admin/pengguna?role=PENGHUNI")} className="underline">
                   Lihat daftar
                 </button>
               </p>

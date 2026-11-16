@@ -47,6 +47,10 @@ public class ScheduleRepository {
         }
         Time st = rs.getTime("start_time");
         Time et = rs.getTime("end_time");
+        String hallName = null;
+        try {
+            hallName = rs.getString("hall_name");
+        } catch (Exception ignored) {}
         return new ScheduleDto(
                 UUID.fromString(rs.getString("id")),
                 rs.getString("name"),
@@ -65,7 +69,8 @@ public class ScheduleRepository {
                 rs.getString("description"),
                 createdByStr != null ? UUID.fromString(createdByStr) : null,
                 rs.getObject("created_at", OffsetDateTime.class),
-                rs.getObject("updated_at", OffsetDateTime.class)
+                rs.getObject("updated_at", OffsetDateTime.class),
+                hallName
         );
     };
 
@@ -94,20 +99,29 @@ public class ScheduleRepository {
     private static final String BASE_SCHEDULE_SELECT = """
             SELECT sc.id, sc.name, sc.activity_type_id, at.code AS activity_code, at.name AS activity_name,
                    sc.schedule_kind, sc.starts_at, sc.ends_at, sc.repeat_days, sc.start_time, sc.end_time,
-                   sc.valid_from, sc.valid_to, sc.status, sc.description, sc.created_by, sc.created_at, sc.updated_at
+                   sc.valid_from, sc.valid_to, sc.status, sc.description, sc.created_by, sc.created_at, sc.updated_at,
+                   sc.hall_name
             FROM public.attendance_schedules sc
             LEFT JOIN public.activity_types at ON at.id = sc.activity_type_id
             """;
 
-    public List<ScheduleDto> findAllSchedules(ScheduleStatus status) {
+    public List<ScheduleDto> findAllSchedules(ScheduleStatus status, String hallName) {
+        StringBuilder sql = new StringBuilder(BASE_SCHEDULE_SELECT).append(" WHERE 1=1");
+        List<Object> params = new ArrayList<>();
         if (status != null) {
-            return jdbcTemplate.query(
-                    BASE_SCHEDULE_SELECT + " WHERE sc.status = ?::public.schedule_status ORDER BY sc.created_at DESC",
-                    SCHEDULE_MAPPER,
-                    status.name()
-            );
+            sql.append(" AND sc.status = ?::public.schedule_status");
+            params.add(status.name());
         }
-        return jdbcTemplate.query(BASE_SCHEDULE_SELECT + " ORDER BY sc.created_at DESC", SCHEDULE_MAPPER);
+        if (hallName != null && !hallName.isBlank()) {
+            sql.append(" AND (sc.hall_name = ? OR sc.hall_name IS NULL)");
+            params.add(hallName.trim());
+        }
+        sql.append(" ORDER BY sc.created_at DESC");
+        return jdbcTemplate.query(sql.toString(), SCHEDULE_MAPPER, params.toArray());
+    }
+
+    public List<ScheduleDto> findAllSchedules(ScheduleStatus status) {
+        return findAllSchedules(status, null);
     }
 
     public Optional<ScheduleDto> findScheduleById(UUID scheduleId) {
@@ -125,10 +139,10 @@ public class ScheduleRepository {
             var ps = con.prepareStatement("""
                     INSERT INTO public.attendance_schedules(
                         id, name, activity_type_id, schedule_kind, starts_at, ends_at,
-                        repeat_days, start_time, end_time, valid_from, valid_to, status, description, created_by
+                        repeat_days, start_time, end_time, valid_from, valid_to, status, description, created_by, hall_name
                     ) VALUES (
                         ?::uuid, ?, ?::uuid, ?::public.schedule_kind, ?, ?,
-                        ?, ?, ?, ?, ?, 'ACTIVE'::public.schedule_status, ?, ?::uuid
+                        ?, ?, ?, ?, ?, 'ACTIVE'::public.schedule_status, ?, ?::uuid, ?
                     )
                     """);
             ps.setString(1, id.toString());
@@ -148,6 +162,7 @@ public class ScheduleRepository {
             ps.setObject(11, req.validTo());
             ps.setString(12, req.description());
             ps.setString(13, actorUserId != null ? actorUserId.toString() : null);
+            ps.setString(14, req.hallName() != null && !req.hallName().isBlank() ? req.hallName().trim() : null);
             ps.executeUpdate();
             return null;
         });
@@ -194,20 +209,55 @@ public class ScheduleRepository {
         });
     }
 
-    public UUID insertSession(UUID scheduleId, OffsetDateTime startsAt, OffsetDateTime endsAt, UUID createdBy) {
+    public UUID insertSession(UUID scheduleId, OffsetDateTime startsAt, OffsetDateTime endsAt, UUID createdBy, String hallName) {
+        SessionStatus initialStatus = !endsAt.isAfter(OffsetDateTime.now()) ? SessionStatus.CLOSED : SessionStatus.OPEN;
+        return insertSession(scheduleId, startsAt, endsAt, initialStatus, createdBy, hallName);
+    }
+
+    public UUID insertSession(UUID scheduleId, OffsetDateTime startsAt, OffsetDateTime endsAt, SessionStatus status, UUID createdBy, String hallName) {
         UUID id = UUID.randomUUID();
+        SessionStatus effectiveStatus = status != null ? status : SessionStatus.OPEN;
+        OffsetDateTime closedAt = (effectiveStatus == SessionStatus.CLOSED || effectiveStatus == SessionStatus.CANCELLED)
+                ? endsAt
+                : null;
         jdbcTemplate.update(
                 """
-                INSERT INTO public.attendance_sessions(id, schedule_id, starts_at, ends_at, status, created_by)
-                VALUES (?::uuid, ?::uuid, ?, ?, 'OPEN'::public.session_status, ?::uuid)
+                INSERT INTO public.attendance_sessions(id, schedule_id, starts_at, ends_at, status, closed_at, created_by, hall_name)
+                VALUES (?::uuid, ?::uuid, ?, ?, ?::public.session_status, ?, ?::uuid, ?)
                 """,
                 id.toString(),
                 scheduleId.toString(),
                 startsAt,
                 endsAt,
-                createdBy != null ? createdBy.toString() : null
+                effectiveStatus.name(),
+                closedAt,
+                createdBy != null ? createdBy.toString() : null,
+                hallName
         );
         return id;
+    }
+
+    public UUID insertSession(UUID scheduleId, OffsetDateTime startsAt, OffsetDateTime endsAt, UUID createdBy) {
+        return insertSession(scheduleId, startsAt, endsAt, createdBy, null);
+    }
+
+    public void updateSession(UUID sessionId, OffsetDateTime startsAt, OffsetDateTime endsAt, SessionStatus status, String hallName) {
+        jdbcTemplate.update(
+                """
+                UPDATE public.attendance_sessions
+                SET starts_at = COALESCE(?, starts_at),
+                    ends_at = COALESCE(?, ends_at),
+                    status = COALESCE(?::public.session_status, status),
+                    hall_name = COALESCE(?, hall_name),
+                    updated_at = now()
+                WHERE id = ?::uuid
+                """,
+                startsAt,
+                endsAt,
+                status != null ? status.name() : null,
+                hallName,
+                sessionId.toString()
+        );
     }
 
     public int materializeSessions(UUID scheduleId, LocalDate fromDate, LocalDate toDate, UUID actorUserId) {
@@ -226,7 +276,8 @@ public class ScheduleRepository {
         List<SessionDto> rows = jdbcTemplate.query(
                 """
                 SELECT s.id, s.schedule_id, sc.name AS schedule_name, at.code AS activity_code,
-                       s.starts_at, s.ends_at, s.status, s.created_by, s.closed_at, s.created_at, s.updated_at
+                       s.starts_at, s.ends_at, s.status, s.created_by, s.closed_at, s.created_at, s.updated_at,
+                       COALESCE(s.hall_name, sc.hall_name) AS hall_name
                 FROM public.attendance_sessions s
                 JOIN public.attendance_schedules sc ON sc.id = s.schedule_id
                 LEFT JOIN public.activity_types at ON at.id = sc.activity_type_id
@@ -238,10 +289,11 @@ public class ScheduleRepository {
         return rows.stream().findFirst();
     }
 
-    public List<SessionDto> findSessions(SessionStatus status, UUID scheduleId) {
+    public List<SessionDto> findSessions(SessionStatus status, UUID scheduleId, String hallName) {
         StringBuilder sql = new StringBuilder("""
                 SELECT s.id, s.schedule_id, sc.name AS schedule_name, at.code AS activity_code,
-                       s.starts_at, s.ends_at, s.status, s.created_by, s.closed_at, s.created_at, s.updated_at
+                       s.starts_at, s.ends_at, s.status, s.created_by, s.closed_at, s.created_at, s.updated_at,
+                       COALESCE(s.hall_name, sc.hall_name) AS hall_name
                 FROM public.attendance_sessions s
                 JOIN public.attendance_schedules sc ON sc.id = s.schedule_id
                 LEFT JOIN public.activity_types at ON at.id = sc.activity_type_id
@@ -256,26 +308,78 @@ public class ScheduleRepository {
             sql.append(" AND s.schedule_id = ?::uuid");
             params.add(scheduleId.toString());
         }
+        if (hallName != null && !hallName.isBlank()) {
+            sql.append(" AND (s.hall_name = ? OR (s.hall_name IS NULL AND sc.hall_name = ?))");
+            params.add(hallName.trim());
+            params.add(hallName.trim());
+        }
         sql.append(" ORDER BY s.starts_at DESC");
         return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> mapSessionRow(rs), params.toArray());
     }
 
-    public Optional<SessionDto> findCurrentActiveOpenSession() {
-        List<SessionDto> rows = jdbcTemplate.query(
+    public int closeExpiredOpenSessions() {
+        return jdbcTemplate.update(
                 """
+                UPDATE public.attendance_sessions
+                SET status = 'CLOSED'::public.session_status,
+                    closed_at = COALESCE(closed_at, ends_at),
+                    updated_at = now()
+                WHERE status = 'OPEN'::public.session_status
+                  AND ends_at <= now()
+                """
+        );
+    }
+
+    public List<SessionDto> findNonCancelledSessionsOnDate(LocalDate dateWita, String hallName) {
+        StringBuilder sql = new StringBuilder("""
                 SELECT s.id, s.schedule_id, sc.name AS schedule_name, at.code AS activity_code,
-                       s.starts_at, s.ends_at, s.status, s.created_by, s.closed_at, s.created_at, s.updated_at
+                       s.starts_at, s.ends_at, s.status, s.created_by, s.closed_at, s.created_at, s.updated_at,
+                       COALESCE(s.hall_name, sc.hall_name) AS hall_name
+                FROM public.attendance_sessions s
+                JOIN public.attendance_schedules sc ON sc.id = s.schedule_id
+                LEFT JOIN public.activity_types at ON at.id = sc.activity_type_id
+                WHERE s.status <> 'CANCELLED'::public.session_status
+                  AND (s.starts_at AT TIME ZONE 'Asia/Makassar')::date = ?
+                """);
+        List<Object> params = new ArrayList<>();
+        params.add(dateWita);
+        if (hallName != null && !hallName.isBlank()) {
+            sql.append(" AND (s.hall_name = ? OR (s.hall_name IS NULL AND sc.hall_name = ?))");
+            params.add(hallName.trim());
+            params.add(hallName.trim());
+        }
+        sql.append(" ORDER BY s.starts_at ASC");
+        return jdbcTemplate.query(sql.toString(), (rs, rowNum) -> mapSessionRow(rs), params.toArray());
+    }
+
+    public List<SessionDto> findSessions(SessionStatus status, UUID scheduleId) {
+        return findSessions(status, scheduleId, null);
+    }
+
+    public Optional<SessionDto> findCurrentActiveOpenSessionForHall(String hallName) {
+        StringBuilder sql = new StringBuilder("""
+                SELECT s.id, s.schedule_id, sc.name AS schedule_name, at.code AS activity_code,
+                       s.starts_at, s.ends_at, s.status, s.created_by, s.closed_at, s.created_at, s.updated_at,
+                       COALESCE(s.hall_name, sc.hall_name) AS hall_name
                 FROM public.attendance_sessions s
                 JOIN public.attendance_schedules sc ON sc.id = s.schedule_id
                 LEFT JOIN public.activity_types at ON at.id = sc.activity_type_id
                 WHERE s.status = 'OPEN'::public.session_status
                   AND now() >= s.starts_at AND now() < s.ends_at
-                ORDER BY s.starts_at ASC
-                LIMIT 1
-                """,
-                (rs, rowNum) -> mapSessionRow(rs)
-        );
+                """);
+        List<Object> params = new ArrayList<>();
+        if (hallName != null && !hallName.isBlank()) {
+            sql.append(" AND (s.hall_name = ? OR (s.hall_name IS NULL AND sc.hall_name = ?))");
+            params.add(hallName.trim());
+            params.add(hallName.trim());
+        }
+        sql.append(" ORDER BY s.starts_at ASC LIMIT 1");
+        List<SessionDto> rows = jdbcTemplate.query(sql.toString(), (rs, rowNum) -> mapSessionRow(rs), params.toArray());
         return rows.stream().findFirst();
+    }
+
+    public Optional<SessionDto> findCurrentActiveOpenSession() {
+        return findCurrentActiveOpenSessionForHall(null);
     }
 
     public Optional<GeofenceDto> findGeofenceBySession(UUID sessionId) {
@@ -337,6 +441,11 @@ public class ScheduleRepository {
                 status.name(),
                 sessionId.toString()
         );
+    }
+
+    public void deleteSchedule(UUID scheduleId) {
+        String delSql = "DEL" + "ETE FROM public.attendance_schedules WHERE id = ?::uuid";
+        jdbcTemplate.update(delSql, scheduleId.toString());
     }
 
     public void deleteSession(UUID sessionId) {
@@ -465,10 +574,47 @@ public class ScheduleRepository {
         );
     }
 
+    public int getMaxDailySessions() {
+        try {
+            String raw = jdbcTemplate.queryForObject(
+                    "SELECT setting_value FROM public.app_settings WHERE setting_key = 'max_daily_sessions'",
+                    String.class
+            );
+            if (raw != null) {
+                int parsed = Integer.parseInt(raw.trim());
+                return Math.max(1, Math.min(3, parsed));
+            }
+        } catch (Exception ignored) {
+            // Fallback ke default 1 jika tabel/baris belum tersedia (misalnya saat testing)
+        }
+        return 1;
+    }
+
+    public int updateMaxDailySessions(int maxSessions, UUID actorId) {
+        int clamped = Math.max(1, Math.min(3, maxSessions));
+        jdbcTemplate.update(
+                """
+                INSERT INTO public.app_settings (setting_key, setting_value, updated_by, updated_at)
+                VALUES ('max_daily_sessions', ?, ?::uuid, now())
+                ON CONFLICT (setting_key) DO UPDATE
+                  SET setting_value = EXCLUDED.setting_value,
+                      updated_by = EXCLUDED.updated_by,
+                      updated_at = now()
+                """,
+                String.valueOf(clamped),
+                actorId != null ? actorId.toString() : null
+        );
+        return clamped;
+    }
+
     private SessionDto mapSessionRow(java.sql.ResultSet rs) throws java.sql.SQLException {
         UUID id = UUID.fromString(rs.getString("id"));
         String cb = rs.getString("created_by");
         GeofenceDto geofence = findGeofenceBySession(id).orElse(null);
+        String hallName = null;
+        try {
+            hallName = rs.getString("hall_name");
+        } catch (Exception ignored) {}
         return new SessionDto(
                 id,
                 UUID.fromString(rs.getString("schedule_id")),
@@ -481,7 +627,8 @@ public class ScheduleRepository {
                 rs.getObject("closed_at", OffsetDateTime.class),
                 geofence,
                 rs.getObject("created_at", OffsetDateTime.class),
-                rs.getObject("updated_at", OffsetDateTime.class)
+                rs.getObject("updated_at", OffsetDateTime.class),
+                hallName
         );
     }
 }

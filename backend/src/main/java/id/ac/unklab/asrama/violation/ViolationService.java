@@ -122,7 +122,7 @@ public class ViolationService {
         residentRepository.findById(targetResidentId)
                 .orElseThrow(() -> BusinessException.notFound("RESIDENT_NOT_FOUND", "Penghuni tidak ditemukan"));
 
-        UUID handledBy = (role == UserRole.MONITOR || role == UserRole.VILLAGE_DEAN || role == UserRole.ADMIN)
+        UUID handledBy = (role == UserRole.MONITOR || role == UserRole.ADMIN)
                 ? securityUtils.getCurrentUserId()
                 : null;
 

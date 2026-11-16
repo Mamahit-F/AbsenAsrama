@@ -34,7 +34,7 @@ public class ResidentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR', 'VILLAGE_DEAN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
     @Operation(summary = "Daftar seluruh penghuni dengan filter status, kategori tempat tinggal, pencarian NIM/Nama, dan paginasi")
     public ResponseEntity<ApiResponse<List<ResidentProfileDto>>> listResidents(
             @RequestParam(required = false) ResidentStatus status,
@@ -81,6 +81,23 @@ public class ResidentController {
         return ResponseEntity.ok(ApiResponse.ok("Persetujuan data wajah berhasil dicabut", null));
     }
 
+    @PostMapping("/hall/claim")
+    @PreAuthorize("hasAnyRole('MONITOR', 'ADMIN')")
+    @Operation(summary = "Pendaftaran penghuni ke Hall milik penjaga via NIM (J-09, P-06, K-07)")
+    public ResponseEntity<ApiResponse<ResidentProfileDto>> claimResidentToHall(
+            @Valid @RequestBody ClaimHallRequest request
+    ) {
+        ResidentProfileDto claimed = residentService.claimResidentToGuardHall(request.nim());
+        return ResponseEntity.ok(ApiResponse.ok("Penghuni berhasil didaftarkan ke " + claimed.hallName(), claimed));
+    }
+
+    @GetMapping("/hall/my-hall")
+    @PreAuthorize("hasAnyRole('MONITOR', 'ADMIN')")
+    @Operation(summary = "Daftar penghuni yang terdaftar di Hall milik penjaga saat ini (J-09)")
+    public ResponseEntity<ApiResponse<List<ResidentProfileDto>>> getResidentsInMyHall() {
+        return ResponseEntity.ok(ApiResponse.ok("Daftar penghuni Hall", residentService.getResidentsByGuardHall()));
+    }
+
     @GetMapping("/{residentId}/emergency-contacts")
     @Operation(summary = "Daftar kontak darurat penghuni")
     public ResponseEntity<ApiResponse<List<EmergencyContactDto>>> getEmergencyContacts(@PathVariable UUID residentId) {
@@ -88,7 +105,7 @@ public class ResidentController {
     }
 
     @PostMapping("/{residentId}/emergency-contacts")
-    @PreAuthorize("hasAnyRole('PENGHUNI', 'ADMIN', 'VILLAGE_DEAN')")
+    @PreAuthorize("hasAnyRole('PENGHUNI', 'ADMIN')")
     @Operation(summary = "Menambahkan kontak darurat penghuni")
     public ResponseEntity<ApiResponse<EmergencyContactDto>> addEmergencyContact(
             @PathVariable UUID residentId,

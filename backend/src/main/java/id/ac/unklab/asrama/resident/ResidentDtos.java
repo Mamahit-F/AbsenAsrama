@@ -25,7 +25,33 @@ public final class ResidentDtos {
             boolean hasActiveConsent,
             String activeConsentVersion,
             OffsetDateTime createdAt,
-            OffsetDateTime updatedAt
+            OffsetDateTime updatedAt,
+            String hallName
+    ) {
+        public ResidentProfileDto(
+                UUID id,
+                String nim,
+                String fullName,
+                ResidentStatus status,
+                ResidenceCategory residenceCategory,
+                String building,
+                String roomNumber,
+                boolean hasActiveFaceProfile,
+                OffsetDateTime faceEnrolledAt,
+                boolean hasActiveConsent,
+                String activeConsentVersion,
+                OffsetDateTime createdAt,
+                OffsetDateTime updatedAt
+        ) {
+            this(id, nim, fullName, status, residenceCategory, building, roomNumber,
+                    hasActiveFaceProfile, faceEnrolledAt, hasActiveConsent, activeConsentVersion,
+                    createdAt, updatedAt, null);
+        }
+    }
+
+    public record ClaimHallRequest(
+            @NotBlank(message = "NIM penghuni wajib diisi")
+            String nim
     ) {}
 
     public record ConsentRequest(

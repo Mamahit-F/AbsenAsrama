@@ -432,23 +432,136 @@ class BackendRequirementsSuiteTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("INVALID_SCHEDULE_TIME"));
 
-        // K-05: Deleting session with existing attendance records is blocked with 409 CONFLICT
+        // Perubahan 2 (J-06, K-05): Penjaga bebas menghapus sesi presensi kapan saja tanpa batasan
         UUID sessionId = UUID.randomUUID();
         when(scheduleRepo.findSessionById(sessionId)).thenReturn(Optional.of(new SessionDto(
                 sessionId, UUID.randomUUID(), "Ibadah", "IBADAH_RUTIN",
                 now.minusHours(2), now.minusHours(1), SessionStatus.CLOSED,
                 adminId, now.minusHours(1), null, now, now
         )));
-        when(scheduleRepo.countAttendanceRecordsForSession(sessionId)).thenReturn(12);
 
-        assertThatThrownBy(() -> scheduleService.deleteOrCancelSession(sessionId))
+        // Even with records, delete succeeds without error (cascading in database)
+        scheduleService.deleteOrCancelSession(sessionId);
+        verify(scheduleRepo).deleteSession(sessionId);
+
+        // Case D: Monitor cannot create overlapping or identical-time schedules in their Hall,
+        // unless the conflicting schedule is removed first
+        SecurityUtils monitorSec = mock(SecurityUtils.class);
+        UUID monitorId = UUID.randomUUID();
+        when(monitorSec.getCurrentUserId()).thenReturn(monitorId);
+        when(monitorSec.hasRole("ROLE_MONITOR")).thenReturn(true);
+        when(monitorSec.getCurrentHallName()).thenReturn("Hall A1");
+        ScheduleService monitorScheduleService = new ScheduleService(scheduleRepo, monitorSec);
+
+        UUID existingSchedId = UUID.randomUUID();
+        LocalDate validFrom = LocalDate.now();
+        LocalDate validTo = validFrom.plusDays(30);
+        ScheduleDto existingMorning = new ScheduleDto(
+                existingSchedId, "Apel Pagi", null, "IBADAH_RUTIN", "Ibadah Rutin",
+                ScheduleKind.RECURRING, null, null,
+                List.of((short) 1, (short) 2, (short) 3, (short) 4, (short) 5, (short) 6, (short) 7),
+                LocalTime.of(10, 0), LocalTime.of(10, 5), validFrom, validTo,
+                ScheduleStatus.ACTIVE, null, monitorId, now, now, "Hall A1"
+        );
+        when(scheduleRepo.findAllSchedules(ScheduleStatus.ACTIVE, "Hall A1"))
+                .thenReturn(List.of(existingMorning));
+
+        // 1) Exact same time (10:00 - 10:05) -> rejected
+        CreateScheduleRequest sameTimeReq = new CreateScheduleRequest(
+                "Apel Pagi Duplikat", null, ScheduleKind.RECURRING,
+                null, null, List.of((short) 1),
+                LocalTime.of(10, 0), LocalTime.of(10, 5), validFrom, validTo, null, "Hall A1"
+        );
+        assertThatThrownBy(() -> monitorScheduleService.createSchedule(sameTimeReq))
                 .isInstanceOf(BusinessException.class)
-                .satisfies(ex -> {
-                    BusinessException be = (BusinessException) ex;
-                    assertThat(be.getStatus()).isEqualTo(HttpStatus.CONFLICT);
-                    assertThat(be.getErrorCode()).isEqualTo("SESSION_HAS_ATTENDANCE_RECORDS");
-                });
-        verify(scheduleRepo, never()).deleteSession(any());
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("SCHEDULE_OVERLAP"));
+
+        // 2) Partial overlap (10:02 - 10:06) -> rejected
+        CreateScheduleRequest tailOverlapReq = new CreateScheduleRequest(
+                "Sesi Bertumpuk 1", null, ScheduleKind.RECURRING,
+                null, null, List.of((short) 1),
+                LocalTime.of(10, 2), LocalTime.of(10, 6), validFrom, validTo, null, "Hall A1"
+        );
+        assertThatThrownBy(() -> monitorScheduleService.createSchedule(tailOverlapReq))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("SCHEDULE_OVERLAP"));
+
+        // 3) Enclosing overlap (09:59 - 10:10) -> rejected
+        CreateScheduleRequest enclosingOverlapReq = new CreateScheduleRequest(
+                "Sesi Bertumpuk 2", null, ScheduleKind.RECURRING,
+                null, null, List.of((short) 1),
+                LocalTime.of(9, 59), LocalTime.of(10, 10), validFrom, validTo, null, "Hall A1"
+        );
+        assertThatThrownBy(() -> monitorScheduleService.createSchedule(enclosingOverlapReq))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("SCHEDULE_OVERLAP"));
+
+        // 4) Non-overlapping slot (10:06 - 10:15) -> allowed
+        CreateScheduleRequest afterSlotReq = new CreateScheduleRequest(
+                "Sesi Berikutnya", null, ScheduleKind.RECURRING,
+                null, null, List.of((short) 1),
+                LocalTime.of(10, 6), LocalTime.of(10, 15), validFrom, validTo, null, "Hall A1"
+        );
+        UUID createdAfterId = UUID.randomUUID();
+        ScheduleDto createdAfterDto = new ScheduleDto(
+                createdAfterId, "Sesi Berikutnya", null, "IBADAH_RUTIN", "Ibadah Rutin",
+                ScheduleKind.RECURRING, null, null, List.of((short) 1),
+                LocalTime.of(10, 6), LocalTime.of(10, 15), validFrom, validTo,
+                ScheduleStatus.ACTIVE, null, monitorId, now, now, "Hall A1"
+        );
+        when(scheduleRepo.insertSchedule(any(), eq(monitorId))).thenReturn(createdAfterId);
+        when(scheduleRepo.findScheduleById(createdAfterId)).thenReturn(Optional.of(createdAfterDto));
+        assertThat(monitorScheduleService.createSchedule(afterSlotReq).id()).isEqualTo(createdAfterId);
+
+        // 5) Once existing conflicting schedule is deleted, overlapping time can be added
+        when(scheduleRepo.findScheduleById(existingSchedId)).thenReturn(Optional.of(existingMorning));
+        monitorScheduleService.deleteSchedule(existingSchedId);
+        verify(scheduleRepo).deleteSchedule(existingSchedId);
+
+        when(scheduleRepo.findAllSchedules(ScheduleStatus.ACTIVE, "Hall A1")).thenReturn(List.of());
+        when(scheduleRepo.insertSchedule(any(), eq(monitorId))).thenReturn(createdAfterId);
+        assertThat(monitorScheduleService.createSchedule(tailOverlapReq).id()).isEqualTo(createdAfterId);
+
+        // Case E: Past date rejected (PAST_SCHEDULE_TIME), while same-day past hours ARE allowed
+        java.time.ZoneId witaZone = java.time.ZoneId.of("Asia/Makassar");
+        LocalDate todayWita = OffsetDateTime.now(witaZone).toLocalDate();
+        CreateScheduleRequest pastOneTimeDateReq = new CreateScheduleRequest(
+                "Jadwal Kemarin", null, ScheduleKind.ONE_TIME,
+                todayWita.minusDays(2).atTime(10, 0).atZone(witaZone).toOffsetDateTime(),
+                todayWita.minusDays(2).atTime(11, 0).atZone(witaZone).toOffsetDateTime(),
+                null, null, null, null, null, null, "Hall A1"
+        );
+        assertThatThrownBy(() -> monitorScheduleService.createSchedule(pastOneTimeDateReq))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("PAST_SCHEDULE_TIME"));
+
+        OffsetDateTime todayPastStart = todayWita.atTime(0, 1).atZone(witaZone).toOffsetDateTime();
+        OffsetDateTime todayPastEnd = todayWita.atTime(0, 15).atZone(witaZone).toOffsetDateTime();
+        CreateScheduleRequest sameDayPastHoursReq = new CreateScheduleRequest(
+                "Jadwal Hari Ini Jam Lewat", null, ScheduleKind.ONE_TIME,
+                todayPastStart, todayPastEnd,
+                null, null, null, null, null, null, "Hall A1"
+        );
+        UUID sameDayId = UUID.randomUUID();
+        when(scheduleRepo.findNonCancelledSessionsOnDate(todayWita, "Hall A1")).thenReturn(List.of());
+        when(scheduleRepo.insertSchedule(any(), eq(monitorId))).thenReturn(sameDayId);
+        when(scheduleRepo.findScheduleById(sameDayId)).thenReturn(Optional.of(new ScheduleDto(
+                sameDayId, "Jadwal Hari Ini Jam Lewat", null, "IBADAH_RUTIN", "Ibadah Rutin",
+                ScheduleKind.ONE_TIME, todayPastStart, todayPastEnd, null,
+                null, null, todayWita, todayWita,
+                ScheduleStatus.ACTIVE, null, monitorId, now, now, "Hall A1"
+        )));
+        assertThat(monitorScheduleService.createSchedule(sameDayPastHoursReq).id()).isEqualTo(sameDayId);
+
+        CreateScheduleRequest pastRecurringFromReq = new CreateScheduleRequest(
+                "Jadwal Berulang Mulai Kemarin", null, ScheduleKind.RECURRING,
+                null, null, List.of((short) 1, (short) 2),
+                LocalTime.of(20, 0), LocalTime.of(21, 0),
+                LocalDate.now().minusDays(2), LocalDate.now().plusDays(10), null, "Hall A1"
+        );
+        assertThatThrownBy(() -> monitorScheduleService.createSchedule(pastRecurringFromReq))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("PAST_SCHEDULE_TIME"));
     }
 
     @Test
@@ -501,7 +614,8 @@ class BackendRequirementsSuiteTest {
         String exportedCsv = reportService.exportAttendanceReportCsv(null, null, null, null);
         assertThat(exportedCsv)
                 .contains("record_id,session_id,schedule_name,activity_code,session_starts_at_wita")
-                .contains("10502211001,Budi Santoso,ASRAMA,Crystal,101,HADIR,SCAN")
+                .contains("10502211001,Budi Santoso")
+                .contains("ASRAMA,Crystal,101,HADIR,SCAN")
                 .contains("WITA");
     }
 
@@ -908,16 +1022,13 @@ class BackendRequirementsSuiteTest {
                         OffsetDateTime.now().minusMinutes(10), OffsetDateTime.now().plusMinutes(20),
                         SessionStatus.OPEN, UUID.randomUUID(), null, null, OffsetDateTime.now(), OffsetDateTime.now())
         ));
-        when(scheduleRepo.countAttendanceRecordsForSession(sessionId)).thenReturn(5);
-
         GeofenceConfigRequest updateGeoReq = new GeofenceConfigRequest("Pusat Ibadah", true, unklabLat, unklabLon, 50, 15.0);
-        assertThatThrownBy(() -> scheduleService.configureSessionGeofence(sessionId, updateGeoReq))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(ex -> {
-                    BusinessException be = (BusinessException) ex;
-                    assertThat(be.getStatus()).isEqualTo(HttpStatus.CONFLICT);
-                    assertThat(be.getErrorCode()).isEqualTo("SESSION_HAS_ATTENDANCE_RECORDS");
-                });
+        when(scheduleRepo.upsertGeofence(eq(sessionId), any())).thenReturn(
+                new GeofenceDto(UUID.randomUUID(), sessionId, "Pusat Ibadah", true, unklabLat, unklabLon, 50, 15.0)
+        );
+        GeofenceDto configured = scheduleService.configureSessionGeofence(sessionId, updateGeoReq);
+        assertThat(configured).isNotNull();
+        verify(scheduleRepo).upsertGeofence(sessionId, updateGeoReq);
 
         // 4. Verifikasi Pipeline S-04: Geofence aktif & berada di luar radius ditolak SEBELUM AI dipanggil
         AttendanceRepository attRepo = mock(AttendanceRepository.class);
@@ -958,5 +1069,654 @@ class BackendRequirementsSuiteTest {
                     assertThat(be.getMessage()).contains("di luar radius presensi");
                 });
         verify(aiClient, never()).analyzeAttendanceFrame(any());
+    }
+
+    @Test
+    @DisplayName("SRS Upgrade: Akun Otomatis 11111111, Ubah Sandi 3 Field, Sesi Tanpa Batas, & Isolasi 4 Hall")
+    void testSrsMajorUpgradesComprehensiveFlow() {
+        // 1. Admin Service: Pembuatan Akun Penghuni Otomatis dengan Password Default "11111111" (A-02)
+        AdminRepository mockAdminRepo = mock(AdminRepository.class);
+        ResidentRepository mockAdminResRepo = mock(ResidentRepository.class);
+        EnrollmentRepository mockEnrollRepo = mock(EnrollmentRepository.class);
+        SupabaseStorageService mockAdminStorage = mock(SupabaseStorageService.class);
+
+        AdminService adminService = new AdminService(
+                mockAdminRepo, mockAdminResRepo, mockEnrollRepo, mockAdminStorage, passwordEncoder, jwtTokenService
+        );
+
+        UUID newResidentId = UUID.randomUUID();
+        when(mockAdminResRepo.findByNim("10502221001")).thenReturn(Optional.empty());
+        when(mockAdminRepo.insertResident(any(), any(), any(), any(), any(), any(), any())).thenReturn(newResidentId);
+        when(mockAdminResRepo.findById(newResidentId)).thenReturn(Optional.of(new ResidentProfileDto(
+                newResidentId, "10502221001", "Mahasiswa Baru", ResidentStatus.AKTIF,
+                ResidenceCategory.ASRAMA, "Crystal", "201", false, null, true, null,
+                OffsetDateTime.now(), OffsetDateTime.now()
+        )));
+
+        ResidentProfileDto createdRes = adminService.createResident(new id.ac.unklab.asrama.admin.AdminDtos.CreateResidentRequest(
+                "10502221001", "Mahasiswa Baru", ResidentStatus.AKTIF, ResidenceCategory.ASRAMA, "Crystal", "201"
+        ));
+        assertThat(createdRes).isNotNull();
+        // Verify resident user account is created with default password hash
+        verify(mockAdminRepo).insertResidentUserAccount(eq(newResidentId), eq("10502221001"), anyString());
+
+        // 2. Auth Service: Fitur Ubah Kata Sandi 3 Field (P-01)
+        AuthRepository mockAuthRepo = mock(AuthRepository.class);
+        SecurityUtils mockSec = mock(SecurityUtils.class);
+        AuthService authService = new AuthService(mockAuthRepo, passwordEncoder, jwtTokenService, mockSec);
+
+        UUID residentUserId = UUID.randomUUID();
+        String currentHash = passwordEncoder.encode("11111111");
+
+        when(mockSec.getCurrentPrincipal()).thenReturn(
+                new AppPrincipal(residentUserId, "10502221001", UserRole.PENGHUNI, residentUserId, "Hall A1")
+        );
+        when(mockAuthRepo.findUserById(residentUserId)).thenReturn(Optional.of(
+                new UserLoginLookupRow(residentUserId, "10502221001", "res@unklab.ac.id", currentHash,
+                        UserRole.PENGHUNI, newResidentId, ResidentStatus.AKTIF, true, 0, null, false, "Hall A1")
+        ));
+
+        // 2a. Confirm password mismatch -> Throws PASSWORD_MISMATCH
+        assertThatThrownBy(() -> authService.changeOwnPassword(
+                new ChangePasswordRequest("11111111", "NewSecret123", "WrongSecret123")))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("PASSWORD_MISMATCH"));
+
+        // 2b. New password same as old password -> Throws SAME_PASSWORD
+        assertThatThrownBy(() -> authService.changeOwnPassword(
+                new ChangePasswordRequest("11111111", "11111111", "11111111")))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("SAME_PASSWORD"));
+
+        // 2c. Successful password change
+        authService.changeOwnPassword(new ChangePasswordRequest("11111111", "Baru12345", "Baru12345"));
+        verify(mockAuthRepo).updatePasswordHash(eq(residentUserId), anyString());
+
+        // 3. Schedule Service: Penjaga Bebas Mengubah & Menghapus Sesi Tanpa Batasan (J-06, K-05)
+        ScheduleRepository mockScheduleRepo = mock(ScheduleRepository.class);
+        when(mockSec.getCurrentHallName()).thenReturn("Hall A1");
+        when(mockSec.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        ScheduleService scheduleService = new ScheduleService(mockScheduleRepo, mockSec);
+
+        UUID activeSessionId = UUID.randomUUID();
+        SessionDto openSession = new SessionDto(
+                activeSessionId, UUID.randomUUID(), "Sesi Aktif", "IBADAH_RUTIN",
+                OffsetDateTime.now().minusMinutes(5), OffsetDateTime.now().plusMinutes(55),
+                SessionStatus.OPEN, UUID.randomUUID(), null, null,
+                OffsetDateTime.now(), OffsetDateTime.now(), "Hall A1"
+        );
+        when(mockScheduleRepo.findSessionById(activeSessionId)).thenReturn(Optional.of(openSession));
+
+        // Update session time & name while active
+        UpdateSessionRequest updateReq = new UpdateSessionRequest(
+                "Sesi Diperpanjang", OffsetDateTime.now().minusMinutes(5), OffsetDateTime.now().plusHours(2),
+                SessionStatus.OPEN, "Hall A1", null
+        );
+        scheduleService.updateSession(activeSessionId, updateReq);
+        verify(mockScheduleRepo).updateSession(eq(activeSessionId), any(), any(), eq(SessionStatus.OPEN), eq("Hall A1"));
+
+        // Delete active session freely
+        scheduleService.deleteOrCancelSession(activeSessionId);
+        verify(mockScheduleRepo).deleteSession(activeSessionId);
+
+        // 4. Resident Service: Klaim Penghuni ke Hall (J-09, P-06, K-07)
+        ResidentRepository mockResRepo = mock(ResidentRepository.class);
+        id.ac.unklab.asrama.resident.ResidentService residentService =
+                new id.ac.unklab.asrama.resident.ResidentService(mockResRepo, mockSec);
+
+        // 4a. NIM tidak ditemukan -> NIM_NOT_FOUND
+        when(mockResRepo.findByNim("99999999999")).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> residentService.claimResidentToGuardHall("99999999999"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("NIM_NOT_FOUND"));
+
+        // 4b. Sudah di Hall penjaga sendiri (Hall A1) -> info already in hall
+        when(mockResRepo.findByNim("10502221001")).thenReturn(Optional.of(
+                new ResidentProfileDto(newResidentId, "10502221001", "Mahasiswa", ResidentStatus.AKTIF,
+                        ResidenceCategory.ASRAMA, "Crystal", "201", false, null, true, "v1",
+                        OffsetDateTime.now(), OffsetDateTime.now(), "Hall A1")
+        ));
+        ResidentProfileDto sameHallClaim = residentService.claimResidentToGuardHall("10502221001");
+        assertThat(sameHallClaim).isNotNull();
+
+        // 4c. Sudah terdaftar di Hall lain (Hall B1) -> Rejection ALREADY_IN_OTHER_HALL
+        when(mockResRepo.findByNim("10502221002")).thenReturn(Optional.of(
+                new ResidentProfileDto(UUID.randomUUID(), "10502221002", "Mahasiswa B", ResidentStatus.AKTIF,
+                        ResidenceCategory.ASRAMA, "Genset", "101", false, null, true, "v1",
+                        OffsetDateTime.now(), OffsetDateTime.now(), "Hall B1")
+        ));
+        assertThatThrownBy(() -> residentService.claimResidentToGuardHall("10502221002"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> {
+                    BusinessException be = (BusinessException) ex;
+                    assertThat(be.getErrorCode()).isEqualTo("ALREADY_IN_OTHER_HALL");
+                    assertThat(be.getMessage()).contains("sudah terdaftar di Hall B1");
+                });
+
+        // 4d. Penghuni belum punya Hall (hall == null) -> Berhasil masuk ke Hall A1
+        UUID unclaimedId = UUID.randomUUID();
+        when(mockResRepo.findByNim("10502221003")).thenReturn(Optional.of(
+                new ResidentProfileDto(unclaimedId, "10502221003", "Mahasiswa C", ResidentStatus.AKTIF,
+                        ResidenceCategory.ASRAMA, "Genset", "102", false, null, true, "v1",
+                        OffsetDateTime.now(), OffsetDateTime.now(), null)
+        ));
+        when(mockResRepo.findById(unclaimedId)).thenReturn(Optional.of(
+                new ResidentProfileDto(unclaimedId, "10502221003", "Mahasiswa C", ResidentStatus.AKTIF,
+                        ResidenceCategory.ASRAMA, "Genset", "102", false, null, true, "v1",
+                        OffsetDateTime.now(), OffsetDateTime.now(), "Hall A1")
+        ));
+        ResidentProfileDto claimed = residentService.claimResidentToGuardHall("10502221003");
+        assertThat(claimed).isNotNull();
+        verify(mockResRepo).updateResidentHall(unclaimedId, "Hall A1");
+
+        // 5. Attendance Service: Isolasi Presensi Antar-Hall (P-07)
+        AttendanceRepository mockAttRepo = mock(AttendanceRepository.class);
+        SupabaseStorageService mockStorage = mock(SupabaseStorageService.class);
+        FastApiAiClient mockAi = mock(FastApiAiClient.class);
+        AttendanceService attendanceService = new AttendanceService(
+                mockAttRepo, mockResRepo, mockScheduleRepo, mockStorage, mockAi, appProperties, mockSec
+        );
+
+        // Session di Hall B2, tapi Resident di Hall A1 -> ditolak HALL_MISMATCH
+        UUID sessionB2Id = UUID.randomUUID();
+        SessionDto sessionB2 = new SessionDto(
+                sessionB2Id, UUID.randomUUID(), "Sesi Hall B2", "IBADAH_RUTIN",
+                OffsetDateTime.now().minusMinutes(5), OffsetDateTime.now().plusMinutes(55),
+                SessionStatus.OPEN, UUID.randomUUID(), null, null,
+                OffsetDateTime.now(), OffsetDateTime.now(), "Hall B2"
+        );
+        when(mockScheduleRepo.findSessionById(sessionB2Id)).thenReturn(Optional.of(sessionB2));
+        when(mockResRepo.findById(newResidentId)).thenReturn(Optional.of(new ResidentProfileDto(
+                newResidentId, "10502221001", "Mahasiswa", ResidentStatus.AKTIF,
+                ResidenceCategory.ASRAMA, "Crystal", "201", true, OffsetDateTime.now(), true, "v1",
+                OffsetDateTime.now(), OffsetDateTime.now(), "Hall A1"
+        )));
+
+        ManualAttendanceRequest manualReq = new ManualAttendanceRequest(
+                sessionB2Id, newResidentId, AttendanceStatus.HADIR, "Sakit"
+        );
+        assertThatThrownBy(() -> attendanceService.recordManualAttendance(manualReq))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> {
+                    BusinessException be = (BusinessException) ex;
+                    assertThat(be.getErrorCode()).isEqualTo("HALL_MISMATCH");
+                    assertThat(be.getMessage()).contains("terdaftar di Hall A1");
+                });
+    }
+
+    @Test
+    @DisplayName("19. Blackbox Fix: Anti-Enumerasi Login Akun Nonaktif & Validasi Manual Attendance Sesi/Hall")
+    void testBlackboxLoginEnumerationAndManualAttendanceGuards() {
+        // 1. Login dengan password salah pada akun NONAKTIF harus menghasilkan INVALID_CREDENTIALS (401), bukan ACCOUNT_INACTIVE
+        AuthRepository mockAuthRepo = mock(AuthRepository.class);
+        SecurityUtils mockSec = mock(SecurityUtils.class);
+        AuthService authService = new AuthService(mockAuthRepo, passwordEncoder, jwtTokenService, mockSec);
+
+        UUID userId = UUID.randomUUID();
+        UUID residentId = UUID.randomUUID();
+        String validHash = passwordEncoder.encode("SecretPass123");
+
+        when(mockAuthRepo.findUserForLogin("10502229999")).thenReturn(Optional.of(
+                new UserLoginLookupRow(userId, "10502229999", "res99@unklab.ac.id", validHash,
+                        UserRole.PENGHUNI, residentId, ResidentStatus.NONAKTIF, false, 0, null, false, "Hall A1")
+        ));
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("10502229999", "SalahPassword")))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> {
+                    BusinessException be = (BusinessException) ex;
+                    assertThat(be.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED);
+                    assertThat(be.getErrorCode()).isEqualTo("INVALID_CREDENTIALS");
+                });
+
+        // Password benar pada akun nonaktif tetap mengembalikan ACCOUNT_INACTIVE (403)
+        assertThatThrownBy(() -> authService.login(new LoginRequest("10502229999", "SecretPass123")))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> {
+                    BusinessException be = (BusinessException) ex;
+                    assertThat(be.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+                    assertThat(be.getErrorCode()).isEqualTo("ACCOUNT_INACTIVE");
+                });
+
+        // 2. Manual attendance menolak sesi lebih dari 7 hari ke belakang (HISTORY_EDIT_EXPIRED)
+        //    dan penghuni tanpa Hall pada sesi khusus Hall (HALL_UNASSIGNED), namun MENGIZINKAN sesi CLOSED <= 7 hari
+        AttendanceRepository mockAttRepo = mock(AttendanceRepository.class);
+        ResidentRepository mockResRepo = mock(ResidentRepository.class);
+        ScheduleRepository mockSchedRepo = mock(ScheduleRepository.class);
+        SupabaseStorageService mockStorage = mock(SupabaseStorageService.class);
+        FastApiAiClient mockAi = mock(FastApiAiClient.class);
+        SecurityUtils guardSec = mock(SecurityUtils.class);
+        AttendanceService attendanceService = new AttendanceService(
+                mockAttRepo, mockResRepo, mockSchedRepo, mockStorage, mockAi, appProperties, guardSec
+        );
+
+        UUID guardUserId = UUID.randomUUID();
+        when(guardSec.getCurrentPrincipal()).thenReturn(
+                new AppPrincipal(guardUserId, "guardA1", UserRole.MONITOR, null, "Hall A1")
+        );
+        when(guardSec.hasRole("ROLE_MONITOR")).thenReturn(true);
+        when(guardSec.getCurrentHallName()).thenReturn("Hall A1");
+
+        UUID expiredHistorySessionId = UUID.randomUUID();
+        when(mockSchedRepo.findSessionById(expiredHistorySessionId)).thenReturn(Optional.of(
+                new SessionDto(expiredHistorySessionId, UUID.randomUUID(), "Ibadah Minggu Lalu", "IBADAH_SORE",
+                        OffsetDateTime.now().minusDays(8), OffsetDateTime.now().minusDays(8).plusHours(1),
+                        SessionStatus.CLOSED, guardUserId, OffsetDateTime.now().minusDays(8).plusHours(1),
+                        null, OffsetDateTime.now(), OffsetDateTime.now(), "Hall A1")
+        ));
+        assertThatThrownBy(() -> attendanceService.recordManualAttendance(
+                new ManualAttendanceRequest(expiredHistorySessionId, residentId, AttendanceStatus.HADIR, "Terlambat tercatat")))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("HISTORY_EDIT_EXPIRED"));
+
+        UUID closedSessionId = UUID.randomUUID();
+        when(mockSchedRepo.findSessionById(closedSessionId)).thenReturn(Optional.of(
+                new SessionDto(closedSessionId, UUID.randomUUID(), "Ibadah Hari Ini Ditutup", "IBADAH_SORE",
+                        OffsetDateTime.now().minusHours(2), OffsetDateTime.now().minusHours(1),
+                        SessionStatus.CLOSED, guardUserId, OffsetDateTime.now().minusHours(1),
+                        null, OffsetDateTime.now(), OffsetDateTime.now(), "Hall A1")
+        ));
+        when(mockResRepo.findById(residentId)).thenReturn(Optional.of(
+                new ResidentProfileDto(residentId, "10502229999", "Penghuni Tanpa Hall", ResidentStatus.AKTIF,
+                        ResidenceCategory.ASRAMA, "Crystal", "105", false, null, true, "v1",
+                        OffsetDateTime.now(), OffsetDateTime.now(), null)
+        ));
+        assertThatThrownBy(() -> attendanceService.recordManualAttendance(
+                new ManualAttendanceRequest(closedSessionId, residentId, AttendanceStatus.HADIR, "Izin")))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("HALL_UNASSIGNED"));
+    }
+
+    @Test
+    @DisplayName("20. User Management: Perlindungan Hapus Akun Sendiri, Admin Terakhir, dan Penghapusan Akun Petugas")
+    void testDeleteUserGuards() {
+        AdminRepository mockAdminRepo = mock(AdminRepository.class);
+        ResidentRepository mockResRepo = mock(ResidentRepository.class);
+        EnrollmentRepository mockEnrollRepo = mock(EnrollmentRepository.class);
+        SupabaseStorageService mockStorage = mock(SupabaseStorageService.class);
+        AdminService adminService = new AdminService(
+                mockAdminRepo, mockResRepo, mockEnrollRepo, mockStorage, passwordEncoder, jwtTokenService
+        );
+
+        UUID actorId = UUID.randomUUID();
+        UUID monitorId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+
+        when(mockAdminRepo.findUserAccountById(actorId)).thenReturn(Optional.of(
+                new id.ac.unklab.asrama.admin.AdminDtos.UserAccountDto(
+                        actorId, null, null, null, "admin01", "admin@unklab.ac.id", UserRole.ADMIN,
+                        true, 0, null, null, OffsetDateTime.now(), OffsetDateTime.now(), null
+                )
+        ));
+        assertThatThrownBy(() -> adminService.deleteUser(actorId, actorId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("CANNOT_DELETE_SELF"));
+
+        when(mockAdminRepo.findUserAccountById(adminId)).thenReturn(Optional.of(
+                new id.ac.unklab.asrama.admin.AdminDtos.UserAccountDto(
+                        adminId, null, null, null, "admin02", "admin2@unklab.ac.id", UserRole.ADMIN,
+                        true, 0, null, null, OffsetDateTime.now(), OffsetDateTime.now(), null
+                )
+        ));
+        when(mockAdminRepo.countActiveAdmins()).thenReturn(1);
+        assertThatThrownBy(() -> adminService.deleteUser(adminId, actorId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("CANNOT_DELETE_LAST_ADMIN"));
+
+        when(mockAdminRepo.findUserAccountById(monitorId)).thenReturn(Optional.of(
+                new id.ac.unklab.asrama.admin.AdminDtos.UserAccountDto(
+                        monitorId, null, null, null, "penjaga.a1", "penjaga@unklab.ac.id", UserRole.MONITOR,
+                        true, 0, null, null, OffsetDateTime.now(), OffsetDateTime.now(), "Hall A1"
+                )
+        ));
+        adminService.deleteUser(monitorId, actorId);
+        verify(mockAdminRepo).deleteUser(monitorId);
+
+        assertThat(UserRole.fromDatabase("VILLAGE_DEAN")).isEqualTo(UserRole.ADMIN);
+        assertThat(UserRole.fromDatabase("monitor")).isEqualTo(UserRole.MONITOR);
+    }
+
+    @Test
+    @DisplayName("21. Guard Rules: Sesi Jam Lewat Hari Ini Auto-Close, Max 1 Sesi/Hari, Scan Ditolak, Manual/Edit Maksimal 7 Hari")
+    void testGuardDailyLimitAutoCloseAndOneWeekHistoryRules() {
+        ScheduleRepository mockSchedRepo = mock(ScheduleRepository.class);
+        SecurityUtils guardSec = mock(SecurityUtils.class);
+        UUID guardId = UUID.randomUUID();
+        when(guardSec.getCurrentUserId()).thenReturn(guardId);
+        when(guardSec.hasRole("ROLE_MONITOR")).thenReturn(true);
+        when(guardSec.getCurrentHallName()).thenReturn("Hall B1");
+        ScheduleService guardScheduleService = new ScheduleService(mockSchedRepo, guardSec);
+
+        java.time.ZoneId witaZone = java.time.ZoneId.of("Asia/Makassar");
+        OffsetDateTime nowWita = OffsetDateTime.now(witaZone);
+        LocalDate todayWita = nowWita.toLocalDate();
+        OffsetDateTime todayMidnight = todayWita.atStartOfDay(witaZone).toOffsetDateTime();
+        OffsetDateTime pastEnd = nowWita.minusMinutes(1).isAfter(todayMidnight)
+                ? nowWita.minusMinutes(1)
+                : todayMidnight.plusSeconds(2);
+        OffsetDateTime pastStart = pastEnd.minusMinutes(1).isAfter(todayMidnight)
+                ? pastEnd.minusMinutes(1)
+                : todayMidnight;
+        UUID schedId = UUID.randomUUID();
+        UUID sessId = UUID.randomUUID();
+
+        ScheduleDto todayPastSched = new ScheduleDto(
+                schedId, "Presensi Pagi Lewat", null, "IBADAH_RUTIN", "Ibadah Rutin",
+                ScheduleKind.ONE_TIME, pastStart, pastEnd, null,
+                null, null, todayWita, todayWita, ScheduleStatus.ACTIVE, null, guardId,
+                OffsetDateTime.now(), OffsetDateTime.now(), "Hall B1"
+        );
+        when(mockSchedRepo.findScheduleById(schedId)).thenReturn(Optional.of(todayPastSched));
+        when(mockSchedRepo.findNonCancelledSessionsOnDate(todayWita, "Hall B1")).thenReturn(List.of());
+        when(mockSchedRepo.insertSession(eq(schedId), eq(pastStart), eq(pastEnd), eq(SessionStatus.CLOSED), eq(guardId), eq("Hall B1")))
+                .thenReturn(sessId);
+        SessionDto autoClosedSession = new SessionDto(
+                sessId, schedId, "Presensi Pagi Lewat", "IBADAH_RUTIN",
+                pastStart, pastEnd, SessionStatus.CLOSED, guardId, pastEnd, null,
+                OffsetDateTime.now(), OffsetDateTime.now(), "Hall B1"
+        );
+        when(mockSchedRepo.findSessionById(sessId)).thenReturn(Optional.of(autoClosedSession));
+
+        // 1) Creating a session with past hours today auto-creates it in CLOSED status
+        SessionDto created = guardScheduleService.createSession(new CreateSessionRequest(schedId, pastStart, pastEnd, "Hall B1"));
+        assertThat(created.status()).isEqualTo(SessionStatus.CLOSED);
+        verify(mockSchedRepo).insertSession(schedId, pastStart, pastEnd, SessionStatus.CLOSED, guardId, "Hall B1");
+
+        // 2) Creating a second schedule/session on the SAME day is blocked (DAILY_SESSION_LIMIT)
+        when(mockSchedRepo.findNonCancelledSessionsOnDate(todayWita, "Hall B1")).thenReturn(List.of(autoClosedSession));
+        CreateScheduleRequest secondSameDay = new CreateScheduleRequest(
+                "Sesi Kedua Hari Ini", null, ScheduleKind.ONE_TIME,
+                todayWita.atTime(20, 0).atZone(witaZone).toOffsetDateTime(),
+                todayWita.atTime(21, 0).atZone(witaZone).toOffsetDateTime(),
+                null, null, null, null, null, null, "Hall B1"
+        );
+        assertThatThrownBy(() -> guardScheduleService.createSchedule(secondSameDay))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("DAILY_SESSION_LIMIT"));
+
+        // 3) Deleting first session permanently also cleans up orphaned ONE_TIME schedule and unblocks that day
+        when(mockSchedRepo.findSessions(null, schedId, null)).thenReturn(List.of());
+        guardScheduleService.deleteOrCancelSession(sessId);
+        verify(mockSchedRepo).deleteSession(sessId);
+        verify(mockSchedRepo).deleteSchedule(schedId);
+
+        // 4) Face scan is rejected on CLOSED session (SESSION_CLOSED)
+        AttendanceRepository mockAttRepo = mock(AttendanceRepository.class);
+        ResidentRepository mockResRepo = mock(ResidentRepository.class);
+        SupabaseStorageService mockStorage = mock(SupabaseStorageService.class);
+        FastApiAiClient mockAi = mock(FastApiAiClient.class);
+        AttendanceService guardAttService = new AttendanceService(
+                mockAttRepo, mockResRepo, mockSchedRepo, mockStorage, mockAi, appProperties, guardSec
+        );
+        UUID resId = UUID.randomUUID();
+        org.springframework.mock.web.MockMultipartFile frame = new org.springframework.mock.web.MockMultipartFile(
+                "file", "face.jpg", "image/jpeg", "fake-jpg".getBytes()
+        );
+        assertThatThrownBy(() -> guardAttService.scanGuardAssistedAttendance(
+                sessId, resId, "Bantu scan", frame, null, null, null, null
+        ))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("SESSION_CLOSED"));
+
+        // 5) Guard manual & edit allowed on CLOSED session within 7 days, blocked beyond 7 days
+        when(mockResRepo.findById(resId)).thenReturn(Optional.of(
+                new ResidentProfileDto(resId, "10502221001", "Penghuni Hall B1", ResidentStatus.AKTIF,
+                        ResidenceCategory.ASRAMA, "Crystal", "201", false, null, true, "v1",
+                        OffsetDateTime.now(), OffsetDateTime.now(), "Hall B1")
+        ));
+        UUID recId = UUID.randomUUID();
+        when(mockAttRepo.findBySessionAndResident(sessId, resId)).thenReturn(Optional.empty());
+        when(mockAttRepo.insertAttendanceRecord(any(), any(), any(), any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(), any(), any())).thenReturn(recId);
+        AttendanceRecordDto dto = new AttendanceRecordDto(
+                recId, sessId, resId, "10502221001", "Penghuni Hall B1", AttendanceStatus.HADIR,
+                AttendanceMethod.MANUAL, "Kamera rusak", guardId, "guardB1",
+                null, null, null, null, null, null, null, null, null, null, OffsetDateTime.now()
+        );
+        when(mockAttRepo.findById(recId)).thenReturn(Optional.of(dto));
+
+        AttendanceRecordDto manualSaved = guardAttService.recordManualAttendance(
+                new ManualAttendanceRequest(sessId, resId, AttendanceStatus.HADIR, "Kamera rusak")
+        );
+        assertThat(manualSaved.status()).isEqualTo(AttendanceStatus.HADIR);
+        verify(mockAttRepo).insertAttendanceRecord(
+                eq(sessId), eq(resId), anyString(), anyString(),
+                eq(AttendanceStatus.HADIR), eq(AttendanceMethod.MANUAL), anyString(), eq(guardId),
+                isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull()
+        );
+
+        UUID absentResId = UUID.randomUUID();
+        UUID absentRecId = UUID.randomUUID();
+        when(mockResRepo.findById(absentResId)).thenReturn(Optional.of(
+                new ResidentProfileDto(absentResId, "10502221002", "Penghuni Alpa Hall B1", ResidentStatus.AKTIF,
+                        ResidenceCategory.ASRAMA, "Crystal", "202", false, null, true, "v1",
+                        OffsetDateTime.now(), OffsetDateTime.now(), "Hall B1")
+        ));
+        when(mockAttRepo.findBySessionAndResident(sessId, absentResId)).thenReturn(Optional.empty());
+        when(mockAttRepo.insertAttendanceRecord(
+                eq(sessId), eq(absentResId), anyString(), anyString(),
+                eq(AttendanceStatus.TIDAK_HADIR), isNull(), anyString(), eq(guardId),
+                isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull()
+        )).thenReturn(absentRecId);
+        when(mockAttRepo.findById(absentRecId)).thenReturn(Optional.of(new AttendanceRecordDto(
+                absentRecId, sessId, absentResId, "10502221002", "Penghuni Alpa Hall B1", AttendanceStatus.TIDAK_HADIR,
+                null, "Tanpa keterangan", guardId, "guardB1",
+                null, null, null, null, null, null, null, null, null, null, OffsetDateTime.now()
+        )));
+        AttendanceRecordDto manualAbsent = guardAttService.recordManualAttendance(
+                new ManualAttendanceRequest(sessId, absentResId, AttendanceStatus.TIDAK_HADIR, "Tanpa keterangan")
+        );
+        assertThat(manualAbsent.status()).isEqualTo(AttendanceStatus.TIDAK_HADIR);
+        assertThat(manualAbsent.method()).isNull();
+
+        AttendanceRecordDto editedWithin7Days = guardAttService.correctAttendance(
+                recId, new CorrectAttendanceRequest(AttendanceStatus.TIDAK_HADIR, "Koreksi izin")
+        );
+        assertThat(editedWithin7Days).isNotNull();
+        verify(mockAttRepo).updateAttendanceRecord(recId, AttendanceStatus.TIDAK_HADIR, "Koreksi izin", guardId);
+
+        // Face-scan attendance (SCAN and DIBANTU_PENJAGA) cannot be edited by guard
+        UUID scanRecId = UUID.randomUUID();
+        when(mockAttRepo.findById(scanRecId)).thenReturn(Optional.of(new AttendanceRecordDto(
+                scanRecId, sessId, resId, "10502221001", "Penghuni Hall B1", AttendanceStatus.HADIR,
+                AttendanceMethod.SCAN, null, resId, "10502221001",
+                true, true, null, null, null, 5.0, true, null, null, null, OffsetDateTime.now()
+        )));
+        assertThatThrownBy(() -> guardAttService.correctAttendance(
+                scanRecId, new CorrectAttendanceRequest(AttendanceStatus.TIDAK_HADIR, "Coba ubah scan")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("FACE_SCAN_ATTENDANCE_LOCKED"));
+
+        UUID assistedRecId = UUID.randomUUID();
+        when(mockAttRepo.findById(assistedRecId)).thenReturn(Optional.of(new AttendanceRecordDto(
+                assistedRecId, sessId, resId, "10502221001", "Penghuni Hall B1", AttendanceStatus.HADIR,
+                AttendanceMethod.DIBANTU_PENJAGA, "Kamera penghuni buram", guardId, "guardB1",
+                true, true, null, null, null, 4.0, true, null, null, null, OffsetDateTime.now()
+        )));
+        assertThatThrownBy(() -> guardAttService.correctAttendance(
+                assistedRecId, new CorrectAttendanceRequest(AttendanceStatus.TIDAK_HADIR, "Coba ubah bantu scan")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("FACE_SCAN_ATTENDANCE_LOCKED"));
+
+        UUID oldSessId = UUID.randomUUID();
+        UUID oldRecId = UUID.randomUUID();
+        OffsetDateTime eightDaysAgo = todayWita.minusDays(8).atTime(10, 0).atZone(witaZone).toOffsetDateTime();
+        when(mockSchedRepo.findSessionById(oldSessId)).thenReturn(Optional.of(new SessionDto(
+                oldSessId, UUID.randomUUID(), "Sesi 8 Hari Lalu", "IBADAH_RUTIN",
+                eightDaysAgo, eightDaysAgo.plusHours(1), SessionStatus.CLOSED, guardId, eightDaysAgo.plusHours(1),
+                null, OffsetDateTime.now(), OffsetDateTime.now(), "Hall B1"
+        )));
+        when(mockAttRepo.findById(oldRecId)).thenReturn(Optional.of(new AttendanceRecordDto(
+                oldRecId, oldSessId, resId, "10502221001", "Penghuni Hall B1", AttendanceStatus.TIDAK_HADIR,
+                AttendanceMethod.MANUAL, "Alpha", guardId, "guardB1",
+                null, null, null, null, null, null, null, null, null, null, eightDaysAgo
+        )));
+        assertThatThrownBy(() -> guardAttService.correctAttendance(
+                oldRecId, new CorrectAttendanceRequest(AttendanceStatus.HADIR, "Terlambat edit")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("HISTORY_EDIT_EXPIRED"));
+    }
+
+    @Test
+    @DisplayName("22. Admin Schedule Policy: Batas Sesi Harian Dapat Diatur 1..3 Sesi/Hari & Menolak Nilai Di Luar Rentang")
+    void testAdminConfigurableDailySessionLimitOneToThree() {
+        ScheduleRepository mockSchedRepo = mock(ScheduleRepository.class);
+        SecurityUtils adminSec = mock(SecurityUtils.class);
+        UUID adminId = UUID.randomUUID();
+        when(adminSec.getCurrentUserId()).thenReturn(adminId);
+        ScheduleService svc = new ScheduleService(mockSchedRepo, adminSec);
+
+        // Out-of-range settings rejected
+        assertThatThrownBy(() -> svc.updateMaxDailySessions(0))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("INVALID_DAILY_SESSION_LIMIT"));
+        assertThatThrownBy(() -> svc.updateMaxDailySessions(4))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("INVALID_DAILY_SESSION_LIMIT"));
+
+        when(mockSchedRepo.updateMaxDailySessions(2, adminId)).thenReturn(2);
+        assertThat(svc.updateMaxDailySessions(2).maxDailySessions()).isEqualTo(2);
+
+        // When configured to 2 sessions/day, 1 existing session allows creating a 2nd non-overlapping session on the same day,
+        // while 2 existing sessions block the 3rd with DAILY_SESSION_LIMIT.
+        java.time.ZoneId witaZone = java.time.ZoneId.of("Asia/Makassar");
+        LocalDate futureDate = LocalDate.now(witaZone).plusDays(1);
+        UUID firstSchedId = UUID.randomUUID();
+        UUID secondSchedId = UUID.randomUUID();
+        SessionDto morningSession = new SessionDto(
+                UUID.randomUUID(), firstSchedId, "Presensi Subuh", "IBADAH_RUTIN",
+                futureDate.atTime(5, 0).atZone(witaZone).toOffsetDateTime(),
+                futureDate.atTime(6, 0).atZone(witaZone).toOffsetDateTime(),
+                SessionStatus.OPEN, adminId, null, null, OffsetDateTime.now(), OffsetDateTime.now(), "Hall A1"
+        );
+        SessionDto nightSession = new SessionDto(
+                UUID.randomUUID(), secondSchedId, "Presensi Malam", "IBADAH_RUTIN",
+                futureDate.atTime(20, 0).atZone(witaZone).toOffsetDateTime(),
+                futureDate.atTime(21, 0).atZone(witaZone).toOffsetDateTime(),
+                SessionStatus.OPEN, adminId, null, null, OffsetDateTime.now(), OffsetDateTime.now(), "Hall A1"
+        );
+        when(mockSchedRepo.getMaxDailySessions()).thenReturn(2);
+        when(mockSchedRepo.findNonCancelledSessionsOnDate(futureDate, "Hall A1")).thenReturn(List.of(morningSession));
+        when(mockSchedRepo.findAllSchedules(ScheduleStatus.ACTIVE, "Hall A1")).thenReturn(List.of());
+        UUID createdId = UUID.randomUUID();
+        when(mockSchedRepo.insertSchedule(any(), eq(adminId))).thenReturn(createdId);
+        when(mockSchedRepo.findScheduleById(createdId)).thenReturn(Optional.of(new ScheduleDto(
+                createdId, "Presensi Malam", null, "IBADAH_RUTIN", "Ibadah Rutin",
+                ScheduleKind.ONE_TIME,
+                futureDate.atTime(20, 0).atZone(witaZone).toOffsetDateTime(),
+                futureDate.atTime(21, 0).atZone(witaZone).toOffsetDateTime(),
+                null, null, null, futureDate, futureDate, ScheduleStatus.ACTIVE, null, adminId,
+                OffsetDateTime.now(), OffsetDateTime.now(), "Hall A1"
+        )));
+
+        ScheduleDto secondCreated = svc.createSchedule(new CreateScheduleRequest(
+                "Presensi Malam", null, ScheduleKind.ONE_TIME,
+                futureDate.atTime(20, 0).atZone(witaZone).toOffsetDateTime(),
+                futureDate.atTime(21, 0).atZone(witaZone).toOffsetDateTime(),
+                null, null, null, null, null, null, "Hall A1"
+        ));
+        assertThat(secondCreated.id()).isEqualTo(createdId);
+
+        when(mockSchedRepo.findNonCancelledSessionsOnDate(futureDate, "Hall A1"))
+                .thenReturn(List.of(morningSession, nightSession));
+        CreateScheduleRequest thirdSameDay = new CreateScheduleRequest(
+                "Presensi Siang", null, ScheduleKind.ONE_TIME,
+                futureDate.atTime(12, 0).atZone(witaZone).toOffsetDateTime(),
+                futureDate.atTime(13, 0).atZone(witaZone).toOffsetDateTime(),
+                null, null, null, null, null, null, "Hall A1"
+        );
+        assertThatThrownBy(() -> svc.createSchedule(thirdSameDay))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("DAILY_SESSION_LIMIT"));
+    }
+
+    @Test
+    @DisplayName("23. Monitor ONE_TIME Schedule Locked to Today (1 Day Only) & Auto-Creates Today's Session While Recurring Remains Allowed")
+    void testMonitorOneTimeScheduleTodayOnlyAndAutoMaterialize() {
+        ScheduleRepository mockSchedRepo = mock(ScheduleRepository.class);
+        SecurityUtils guardSec = mock(SecurityUtils.class);
+        UUID guardId = UUID.randomUUID();
+        when(guardSec.getCurrentUserId()).thenReturn(guardId);
+        when(guardSec.hasRole("ROLE_MONITOR")).thenReturn(true);
+        when(guardSec.getCurrentHallName()).thenReturn("Hall B1");
+        ScheduleService guardSvc = new ScheduleService(mockSchedRepo, guardSec);
+
+        java.time.ZoneId witaZone = java.time.ZoneId.of("Asia/Makassar");
+        LocalDate todayWita = LocalDate.now(witaZone);
+        LocalDate tomorrowWita = todayWita.plusDays(1);
+        when(mockSchedRepo.getMaxDailySessions()).thenReturn(2);
+        when(mockSchedRepo.findAllSchedules(ScheduleStatus.ACTIVE, "Hall B1")).thenReturn(List.of());
+
+        // 1) Monitor creating ONE_TIME for tomorrow is rejected with ONE_TIME_MUST_BE_TODAY
+        CreateScheduleRequest tomorrowOneTime = new CreateScheduleRequest(
+                "Jadwal Besok", null, ScheduleKind.ONE_TIME,
+                tomorrowWita.atTime(20, 0).atZone(witaZone).toOffsetDateTime(),
+                tomorrowWita.atTime(21, 0).atZone(witaZone).toOffsetDateTime(),
+                null, null, null, tomorrowWita, tomorrowWita, null, "Hall B1"
+        );
+        assertThatThrownBy(() -> guardSvc.createSchedule(tomorrowOneTime))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("ONE_TIME_MUST_BE_TODAY"));
+
+        // 2) Monitor creating ONE_TIME for today normalizes validFrom/validTo to today..today and auto-inserts today's session
+        OffsetDateTime todayStart = todayWita.atTime(23, 0).atZone(witaZone).toOffsetDateTime();
+        OffsetDateTime todayEnd = todayWita.atTime(23, 55).atZone(witaZone).toOffsetDateTime();
+        UUID todaySchedId = UUID.randomUUID();
+        when(mockSchedRepo.findNonCancelledSessionsOnDate(todayWita, "Hall B1")).thenReturn(List.of());
+        when(mockSchedRepo.insertSchedule(any(), eq(guardId))).thenReturn(todaySchedId);
+        when(mockSchedRepo.findScheduleById(todaySchedId)).thenReturn(Optional.of(new ScheduleDto(
+                todaySchedId, "Apel Hari Ini", null, "IBADAH_RUTIN", "Ibadah Rutin",
+                ScheduleKind.ONE_TIME, todayStart, todayEnd, null, null, null,
+                todayWita, todayWita, ScheduleStatus.ACTIVE, null, guardId,
+                OffsetDateTime.now(), OffsetDateTime.now(), "Hall B1"
+        )));
+
+        CreateScheduleRequest todayReqWithWideValidity = new CreateScheduleRequest(
+                "Apel Hari Ini", null, ScheduleKind.ONE_TIME,
+                todayStart, todayEnd, null, null, null,
+                todayWita, todayWita.plusDays(90), null, "Hall B1"
+        );
+        ScheduleDto created = guardSvc.createSchedule(todayReqWithWideValidity);
+        assertThat(created.id()).isEqualTo(todaySchedId);
+        verify(mockSchedRepo).insertSchedule(argThat(req ->
+                todayWita.equals(req.validFrom()) && todayWita.equals(req.validTo())
+        ), eq(guardId));
+        verify(mockSchedRepo).insertSession(eq(todaySchedId), eq(todayStart), eq(todayEnd), any(SessionStatus.class), eq(guardId), eq("Hall B1"));
+
+        // 3) Monitor updating ONE_TIME to tomorrow is also rejected with ONE_TIME_MUST_BE_TODAY
+        UpdateScheduleRequest updateToTomorrow = new UpdateScheduleRequest(
+                "Apel Besok", null, ScheduleKind.ONE_TIME,
+                tomorrowWita.atTime(20, 0).atZone(witaZone).toOffsetDateTime(),
+                tomorrowWita.atTime(21, 0).atZone(witaZone).toOffsetDateTime(),
+                null, null, null, tomorrowWita, tomorrowWita,
+                ScheduleStatus.ACTIVE, null, "Hall B1"
+        );
+        assertThatThrownBy(() -> guardSvc.updateSchedule(todaySchedId, updateToTomorrow))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode()).isEqualTo("ONE_TIME_MUST_BE_TODAY"));
+
+        // 4) Monitor creating RECURRING schedule with custom validFrom..validTo still works
+        UUID recId = UUID.randomUUID();
+        LocalDate recTo = todayWita.plusDays(30);
+        when(mockSchedRepo.insertSchedule(any(), eq(guardId))).thenReturn(recId);
+        when(mockSchedRepo.findScheduleById(recId)).thenReturn(Optional.of(new ScheduleDto(
+                recId, "Rutin Malam", null, "IBADAH_RUTIN", "Ibadah Rutin",
+                ScheduleKind.RECURRING, null, null, List.of((short) 1, (short) 3),
+                LocalTime.of(20, 0), LocalTime.of(21, 0), todayWita, recTo,
+                ScheduleStatus.ACTIVE, null, guardId,
+                OffsetDateTime.now(), OffsetDateTime.now(), "Hall B1"
+        )));
+        ScheduleDto recurringCreated = guardSvc.createSchedule(new CreateScheduleRequest(
+                "Rutin Malam", null, ScheduleKind.RECURRING,
+                null, null, List.of((short) 1, (short) 3),
+                LocalTime.of(20, 0), LocalTime.of(21, 0),
+                todayWita, recTo, null, "Hall B1"
+        ));
+        assertThat(recurringCreated.id()).isEqualTo(recId);
+        assertThat(recurringCreated.validTo()).isEqualTo(recTo);
     }
 }

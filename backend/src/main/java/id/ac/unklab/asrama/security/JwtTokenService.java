@@ -43,14 +43,22 @@ public class JwtTokenService {
     }
 
     public String generateAccessToken(UUID userId, String username, UserRole role, UUID residentId) {
-        return buildToken(userId, username, role, residentId, "ACCESS", accessExpirationMs);
+        return buildToken(userId, username, role, residentId, null, "ACCESS", accessExpirationMs);
+    }
+
+    public String generateAccessToken(UUID userId, String username, UserRole role, UUID residentId, String hallName) {
+        return buildToken(userId, username, role, residentId, hallName, "ACCESS", accessExpirationMs);
     }
 
     public String generateRefreshToken(UUID userId, String username, UserRole role, UUID residentId) {
-        return buildToken(userId, username, role, residentId, "REFRESH", refreshExpirationMs);
+        return buildToken(userId, username, role, residentId, null, "REFRESH", refreshExpirationMs);
     }
 
-    private String buildToken(UUID userId, String username, UserRole role, UUID residentId, String tokenType, long ttlMs) {
+    public String generateRefreshToken(UUID userId, String username, UserRole role, UUID residentId, String hallName) {
+        return buildToken(userId, username, role, residentId, hallName, "REFRESH", refreshExpirationMs);
+    }
+
+    private String buildToken(UUID userId, String username, UserRole role, UUID residentId, String hallName, String tokenType, long ttlMs) {
         Instant now = Instant.now();
         Instant expiry = now.plusMillis(ttlMs);
         String jti = UUID.randomUUID().toString();
@@ -69,6 +77,9 @@ public class JwtTokenService {
 
         if (residentId != null) {
             builder.claim("resident_id", residentId.toString());
+        }
+        if (hallName != null && !hallName.isBlank()) {
+            builder.claim("hall_name", hallName);
         }
 
         activeUserJtis.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(jti);
@@ -112,10 +123,11 @@ public class JwtTokenService {
     public AppPrincipal toPrincipal(Claims claims) {
         UUID userId = UUID.fromString(claims.getSubject());
         String username = claims.get("username", String.class);
-        UserRole role = UserRole.valueOf(claims.get("role", String.class));
+        UserRole role = UserRole.fromDatabase(claims.get("role", String.class));
         String resIdStr = claims.get("resident_id", String.class);
         UUID residentId = (resIdStr != null && !resIdStr.isBlank()) ? UUID.fromString(resIdStr) : null;
-        return new AppPrincipal(userId, username, role, residentId, claims.getId());
+        String hallName = claims.get("hall_name", String.class);
+        return new AppPrincipal(userId, username, role, residentId, claims.getId(), hallName);
     }
 
     public void revokeToken(String jti) {

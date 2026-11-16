@@ -41,7 +41,7 @@ ALTER TABLE public.residents
   ADD COLUMN IF NOT EXISTS room_number varchar;
 CREATE INDEX IF NOT EXISTS idx_residents_category ON public.residents (residence_category);
 
--- users: lockout login (A-01, A-04) + Village Dean
+-- users: lockout login (A-01, A-04)
 ALTER TABLE public.users
   ADD COLUMN IF NOT EXISTS failed_login_attempts integer NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS locked_until timestamptz,
@@ -50,7 +50,7 @@ ALTER TABLE public.users ALTER COLUMN email DROP NOT NULL;
 ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_resident_role_check;
 ALTER TABLE public.users ADD CONSTRAINT users_resident_role_check CHECK (
   (role = 'PENGHUNI' AND resident_id IS NOT NULL)
-  OR (role IN ('MONITOR','ADMIN','VILLAGE_DEAN') AND resident_id IS NULL));
+  OR (role IN ('MONITOR','ADMIN') AND resident_id IS NULL));
 ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_failed_attempts_check;
 ALTER TABLE public.users ADD CONSTRAINT users_failed_attempts_check CHECK (failed_login_attempts >= 0);
 

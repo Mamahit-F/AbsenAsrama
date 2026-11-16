@@ -84,12 +84,12 @@ BEGIN
 
   -- residents
   CREATE POLICY residents_select ON public.residents FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN') OR id = public.current_app_resident_id());
+    USING (public.current_app_role() IN ('ADMIN','MONITOR') OR id = public.current_app_resident_id());
   CREATE POLICY residents_insert ON public.residents FOR INSERT TO app_backend
     WITH CHECK (public.current_app_role() = 'ADMIN');
   CREATE POLICY residents_update ON public.residents FOR UPDATE TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'))
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'));
+    USING (public.current_app_role() IN ('ADMIN'))
+    WITH CHECK (public.current_app_role() IN ('ADMIN'));
   EXECUTE format('CREATE POLICY residents_del ON public.residents FOR %s TO app_backend USING (public.current_app_role() = ''ADMIN'')', v_del);
 
   -- users
@@ -104,7 +104,7 @@ BEGIN
 
   -- consent_records
   CREATE POLICY consent_select ON public.consent_records FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN') OR resident_id = public.current_app_resident_id());
+    USING (public.current_app_role() IN ('ADMIN','MONITOR') OR resident_id = public.current_app_resident_id());
   CREATE POLICY consent_insert ON public.consent_records FOR INSERT TO app_backend
     WITH CHECK (public.current_app_role() = 'ADMIN' OR (public.current_app_role() = 'PENGHUNI' AND resident_id = public.current_app_resident_id()));
   CREATE POLICY consent_update ON public.consent_records FOR UPDATE TO app_backend
@@ -114,7 +114,7 @@ BEGIN
 
   -- face_enrollments
   CREATE POLICY face_enrollments_select ON public.face_enrollments FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN') OR resident_id = public.current_app_resident_id());
+    USING (public.current_app_role() IN ('ADMIN','MONITOR') OR resident_id = public.current_app_resident_id());
   CREATE POLICY face_enrollments_insert ON public.face_enrollments FOR INSERT TO app_backend
     WITH CHECK (public.current_app_role() = 'ADMIN' OR (public.current_app_role() = 'PENGHUNI' AND resident_id = public.current_app_resident_id()));
   CREATE POLICY face_enrollments_update ON public.face_enrollments FOR UPDATE TO app_backend
@@ -161,17 +161,17 @@ BEGIN
 
   -- semesters
   CREATE POLICY semesters_select ON public.semesters FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN','PENGHUNI'));
+    USING (public.current_app_role() IN ('ADMIN','MONITOR','PENGHUNI'));
   CREATE POLICY semesters_insert ON public.semesters FOR INSERT TO app_backend
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'));
+    WITH CHECK (public.current_app_role() IN ('ADMIN'));
   CREATE POLICY semesters_update ON public.semesters FOR UPDATE TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'))
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'));
-  EXECUTE format('CREATE POLICY semesters_del ON public.semesters FOR %s TO app_backend USING (public.current_app_role() IN (''ADMIN'',''VILLAGE_DEAN''))', v_del);
+    USING (public.current_app_role() IN ('ADMIN'))
+    WITH CHECK (public.current_app_role() IN ('ADMIN'));
+  EXECUTE format('CREATE POLICY semesters_del ON public.semesters FOR %s TO app_backend USING (public.current_app_role() IN (''ADMIN''))', v_del);
 
   -- activity_types
   CREATE POLICY activity_types_select ON public.activity_types FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN','PENGHUNI'));
+    USING (public.current_app_role() IN ('ADMIN','MONITOR','PENGHUNI'));
   CREATE POLICY activity_types_insert ON public.activity_types FOR INSERT TO app_backend
     WITH CHECK (public.current_app_role() = 'ADMIN');
   CREATE POLICY activity_types_update ON public.activity_types FOR UPDATE TO app_backend
@@ -181,30 +181,30 @@ BEGIN
 
   -- activity_requirements
   CREATE POLICY activity_requirements_select ON public.activity_requirements FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN','PENGHUNI'));
+    USING (public.current_app_role() IN ('ADMIN','MONITOR','PENGHUNI'));
   CREATE POLICY activity_requirements_insert ON public.activity_requirements FOR INSERT TO app_backend
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'));
+    WITH CHECK (public.current_app_role() IN ('ADMIN'));
   CREATE POLICY activity_requirements_update ON public.activity_requirements FOR UPDATE TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'))
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'));
-  EXECUTE format('CREATE POLICY activity_requirements_del ON public.activity_requirements FOR %s TO app_backend USING (public.current_app_role() IN (''ADMIN'',''VILLAGE_DEAN''))', v_del);
+    USING (public.current_app_role() IN ('ADMIN'))
+    WITH CHECK (public.current_app_role() IN ('ADMIN'));
+  EXECUTE format('CREATE POLICY activity_requirements_del ON public.activity_requirements FOR %s TO app_backend USING (public.current_app_role() IN (''ADMIN''))', v_del);
 
   -- activity_exemptions
   CREATE POLICY activity_exemptions_select ON public.activity_exemptions FOR SELECT TO app_backend
     USING (
-      public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN')
+      public.current_app_role() IN ('ADMIN','MONITOR')
       OR (public.current_app_role() = 'PENGHUNI' AND (resident_id IS NULL OR resident_id = public.current_app_resident_id()))
     );
   CREATE POLICY activity_exemptions_insert ON public.activity_exemptions FOR INSERT TO app_backend
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN','MONITOR'));
+    WITH CHECK (public.current_app_role() IN ('ADMIN','MONITOR'));
   CREATE POLICY activity_exemptions_update ON public.activity_exemptions FOR UPDATE TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN','MONITOR'))
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN','MONITOR'));
-  EXECUTE format('CREATE POLICY activity_exemptions_del ON public.activity_exemptions FOR %s TO app_backend USING (public.current_app_role() IN (''ADMIN'',''VILLAGE_DEAN'',''MONITOR''))', v_del);
+    USING (public.current_app_role() IN ('ADMIN','MONITOR'))
+    WITH CHECK (public.current_app_role() IN ('ADMIN','MONITOR'));
+  EXECUTE format('CREATE POLICY activity_exemptions_del ON public.activity_exemptions FOR %s TO app_backend USING (public.current_app_role() IN (''ADMIN'',''MONITOR''))', v_del);
 
   -- attendance_schedules
   CREATE POLICY attendance_schedules_select ON public.attendance_schedules FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN','PENGHUNI'));
+    USING (public.current_app_role() IN ('ADMIN','MONITOR','PENGHUNI'));
   CREATE POLICY attendance_schedules_insert ON public.attendance_schedules FOR INSERT TO app_backend
     WITH CHECK (public.current_app_role() IN ('ADMIN','MONITOR'));
   CREATE POLICY attendance_schedules_update ON public.attendance_schedules FOR UPDATE TO app_backend
@@ -214,7 +214,7 @@ BEGIN
 
   -- attendance_sessions
   CREATE POLICY attendance_sessions_select ON public.attendance_sessions FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN','PENGHUNI'));
+    USING (public.current_app_role() IN ('ADMIN','MONITOR','PENGHUNI'));
   CREATE POLICY attendance_sessions_insert ON public.attendance_sessions FOR INSERT TO app_backend
     WITH CHECK (public.current_app_role() IN ('ADMIN','MONITOR'));
   CREATE POLICY attendance_sessions_update ON public.attendance_sessions FOR UPDATE TO app_backend
@@ -224,7 +224,7 @@ BEGIN
 
   -- geofence_settings
   CREATE POLICY geofence_settings_select ON public.geofence_settings FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN','PENGHUNI'));
+    USING (public.current_app_role() IN ('ADMIN','MONITOR','PENGHUNI'));
   CREATE POLICY geofence_settings_insert ON public.geofence_settings FOR INSERT TO app_backend
     WITH CHECK (public.current_app_role() IN ('ADMIN','MONITOR'));
   CREATE POLICY geofence_settings_update ON public.geofence_settings FOR UPDATE TO app_backend
@@ -234,26 +234,26 @@ BEGIN
 
   -- attendance_records
   CREATE POLICY attendance_records_select ON public.attendance_records FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN') OR resident_id = public.current_app_resident_id());
+    USING (public.current_app_role() IN ('ADMIN','MONITOR') OR resident_id = public.current_app_resident_id());
   CREATE POLICY attendance_records_insert ON public.attendance_records FOR INSERT TO app_backend
     WITH CHECK (
       (public.current_app_role() = 'PENGHUNI' AND resident_id = public.current_app_resident_id() AND method = 'SCAN' AND status = 'HADIR')
       OR (public.current_app_role() IN ('MONITOR','ADMIN') AND (method IN ('MANUAL','DIBANTU_PENJAGA') OR status = 'TIDAK_HADIR'))
     );
   CREATE POLICY attendance_records_update ON public.attendance_records FOR UPDATE TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN'))
-    WITH CHECK (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN'));
+    USING (public.current_app_role() IN ('ADMIN','MONITOR'))
+    WITH CHECK (public.current_app_role() IN ('ADMIN','MONITOR'));
 
   -- attendance_record_history
   CREATE POLICY attendance_record_history_select ON public.attendance_record_history FOR SELECT TO app_backend
     USING (
-      public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN')
+      public.current_app_role() IN ('ADMIN','MONITOR')
       OR EXISTS (SELECT 1 FROM public.attendance_records ar WHERE ar.id = attendance_record_history.record_id AND ar.resident_id = public.current_app_resident_id())
     );
 
   -- attendance_validation_logs
   CREATE POLICY attendance_validation_logs_select ON public.attendance_validation_logs FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN') OR resident_id = public.current_app_resident_id());
+    USING (public.current_app_role() IN ('ADMIN','MONITOR') OR resident_id = public.current_app_resident_id());
   CREATE POLICY attendance_validation_logs_insert ON public.attendance_validation_logs FOR INSERT TO app_backend
     WITH CHECK (
       public.current_app_role() IN ('ADMIN','MONITOR')
@@ -262,84 +262,84 @@ BEGIN
 
   -- audit_logs
   CREATE POLICY audit_logs_select ON public.audit_logs FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN','MONITOR'));
+    USING (public.current_app_role() IN ('ADMIN','MONITOR'));
   CREATE POLICY audit_logs_insert ON public.audit_logs FOR INSERT TO app_backend
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN','MONITOR'));
+    WITH CHECK (public.current_app_role() IN ('ADMIN','MONITOR'));
 
   -- violation_rules
   CREATE POLICY violation_rules_select ON public.violation_rules FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN','PENGHUNI'));
+    USING (public.current_app_role() IN ('ADMIN','MONITOR','PENGHUNI'));
   CREATE POLICY violation_rules_insert ON public.violation_rules FOR INSERT TO app_backend
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'));
+    WITH CHECK (public.current_app_role() IN ('ADMIN'));
   CREATE POLICY violation_rules_update ON public.violation_rules FOR UPDATE TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'))
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'));
-  EXECUTE format('CREATE POLICY violation_rules_del ON public.violation_rules FOR %s TO app_backend USING (public.current_app_role() IN (''ADMIN'',''VILLAGE_DEAN''))', v_del);
+    USING (public.current_app_role() IN ('ADMIN'))
+    WITH CHECK (public.current_app_role() IN ('ADMIN'));
+  EXECUTE format('CREATE POLICY violation_rules_del ON public.violation_rules FOR %s TO app_backend USING (public.current_app_role() IN (''ADMIN''))', v_del);
 
   -- violations
   CREATE POLICY violations_select ON public.violations FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN') OR resident_id = public.current_app_resident_id());
+    USING (public.current_app_role() IN ('ADMIN','MONITOR') OR resident_id = public.current_app_resident_id());
   CREATE POLICY violations_insert ON public.violations FOR INSERT TO app_backend
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN','MONITOR'));
+    WITH CHECK (public.current_app_role() IN ('ADMIN','MONITOR'));
   CREATE POLICY violations_update ON public.violations FOR UPDATE TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN','MONITOR'))
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN','MONITOR'));
+    USING (public.current_app_role() IN ('ADMIN','MONITOR'))
+    WITH CHECK (public.current_app_role() IN ('ADMIN','MONITOR'));
 
   -- violation_point_history
   CREATE POLICY violation_point_history_select ON public.violation_point_history FOR SELECT TO app_backend
     USING (
-      public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN')
+      public.current_app_role() IN ('ADMIN','MONITOR')
       OR EXISTS (SELECT 1 FROM public.violations v WHERE v.id = violation_point_history.violation_id AND v.resident_id = public.current_app_resident_id())
     );
 
   -- semester_evaluations
   CREATE POLICY semester_evaluations_select ON public.semester_evaluations FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN') OR resident_id = public.current_app_resident_id());
+    USING (public.current_app_role() IN ('ADMIN','MONITOR') OR resident_id = public.current_app_resident_id());
   CREATE POLICY semester_evaluations_insert ON public.semester_evaluations FOR INSERT TO app_backend
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'));
+    WITH CHECK (public.current_app_role() IN ('ADMIN'));
   CREATE POLICY semester_evaluations_update ON public.semester_evaluations FOR UPDATE TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'))
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'));
+    USING (public.current_app_role() IN ('ADMIN'))
+    WITH CHECK (public.current_app_role() IN ('ADMIN'));
 
   -- coaching_records
   CREATE POLICY coaching_records_select ON public.coaching_records FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','MONITOR','VILLAGE_DEAN') OR resident_id = public.current_app_resident_id());
+    USING (public.current_app_role() IN ('ADMIN','MONITOR') OR resident_id = public.current_app_resident_id());
   CREATE POLICY coaching_records_insert ON public.coaching_records FOR INSERT TO app_backend
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'));
+    WITH CHECK (public.current_app_role() IN ('ADMIN'));
   CREATE POLICY coaching_records_update ON public.coaching_records FOR UPDATE TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'))
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN'));
+    USING (public.current_app_role() IN ('ADMIN'))
+    WITH CHECK (public.current_app_role() IN ('ADMIN'));
 
   -- emergency_contacts
   CREATE POLICY emergency_contacts_select ON public.emergency_contacts FOR SELECT TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN','MONITOR') OR resident_id = public.current_app_resident_id());
+    USING (public.current_app_role() IN ('ADMIN','MONITOR') OR resident_id = public.current_app_resident_id());
   CREATE POLICY emergency_contacts_insert ON public.emergency_contacts FOR INSERT TO app_backend
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN') OR (public.current_app_role() = 'PENGHUNI' AND resident_id = public.current_app_resident_id()));
+    WITH CHECK (public.current_app_role() IN ('ADMIN') OR (public.current_app_role() = 'PENGHUNI' AND resident_id = public.current_app_resident_id()));
   CREATE POLICY emergency_contacts_update ON public.emergency_contacts FOR UPDATE TO app_backend
-    USING (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN') OR (public.current_app_role() = 'PENGHUNI' AND resident_id = public.current_app_resident_id()))
-    WITH CHECK (public.current_app_role() IN ('ADMIN','VILLAGE_DEAN') OR (public.current_app_role() = 'PENGHUNI' AND resident_id = public.current_app_resident_id()));
-  EXECUTE format('CREATE POLICY emergency_contacts_del ON public.emergency_contacts FOR %s TO app_backend USING (public.current_app_role() IN (''ADMIN'',''VILLAGE_DEAN'') OR (public.current_app_role() = ''PENGHUNI'' AND resident_id = public.current_app_resident_id()))', v_del);
+    USING (public.current_app_role() IN ('ADMIN') OR (public.current_app_role() = 'PENGHUNI' AND resident_id = public.current_app_resident_id()))
+    WITH CHECK (public.current_app_role() IN ('ADMIN') OR (public.current_app_role() = 'PENGHUNI' AND resident_id = public.current_app_resident_id()));
+  EXECUTE format('CREATE POLICY emergency_contacts_del ON public.emergency_contacts FOR %s TO app_backend USING (public.current_app_role() IN (''ADMIN'') OR (public.current_app_role() = ''PENGHUNI'' AND resident_id = public.current_app_resident_id()))', v_del);
 
   -- help_requests
   CREATE POLICY help_requests_select ON public.help_requests FOR SELECT TO app_backend
     USING (
-      public.current_app_role() IN ('ADMIN','VILLAGE_DEAN')
+      public.current_app_role() IN ('ADMIN')
       OR (public.current_app_role() = 'MONITOR' AND (handled_by = public.current_app_user_id() OR request_type = 'LAPORAN_TINDAK_LANJUT'))
       OR (public.current_app_role() = 'PENGHUNI' AND resident_id = public.current_app_resident_id() AND request_type = 'PERMINTAAN_BANTUAN')
     );
   CREATE POLICY help_requests_insert ON public.help_requests FOR INSERT TO app_backend
     WITH CHECK (
-      public.current_app_role() IN ('ADMIN','VILLAGE_DEAN')
+      public.current_app_role() IN ('ADMIN')
       OR (public.current_app_role() = 'MONITOR' AND request_type = 'LAPORAN_TINDAK_LANJUT')
       OR (public.current_app_role() = 'PENGHUNI' AND resident_id = public.current_app_resident_id() AND request_type = 'PERMINTAAN_BANTUAN')
     );
   CREATE POLICY help_requests_update ON public.help_requests FOR UPDATE TO app_backend
     USING (
-      public.current_app_role() IN ('ADMIN','VILLAGE_DEAN')
+      public.current_app_role() IN ('ADMIN')
       OR (public.current_app_role() = 'MONITOR' AND (handled_by = public.current_app_user_id() OR request_type = 'LAPORAN_TINDAK_LANJUT'))
     )
     WITH CHECK (
-      public.current_app_role() IN ('ADMIN','VILLAGE_DEAN')
+      public.current_app_role() IN ('ADMIN')
       OR (public.current_app_role() = 'MONITOR' AND (handled_by = public.current_app_user_id() OR request_type = 'LAPORAN_TINDAK_LANJUT'))
     );
 

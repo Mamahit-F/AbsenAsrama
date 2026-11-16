@@ -1,5 +1,6 @@
 package id.ac.unklab.asrama.admin;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import id.ac.unklab.asrama.common.DomainEnums.ResidenceCategory;
 import id.ac.unklab.asrama.common.DomainEnums.ResidentStatus;
 import id.ac.unklab.asrama.common.DomainEnums.UserRole;
@@ -28,8 +29,23 @@ public final class AdminDtos {
             ResidentStatus status,
             ResidenceCategory residenceCategory,
             String building,
-            String roomNumber
-    ) {}
+            String roomNumber,
+            String hallName
+    ) {
+        @JsonCreator
+        public CreateResidentRequest {}
+
+        public CreateResidentRequest(
+                String nim,
+                String fullName,
+                ResidentStatus status,
+                ResidenceCategory residenceCategory,
+                String building,
+                String roomNumber
+        ) {
+            this(nim, fullName, status, residenceCategory, building, roomNumber, null);
+        }
+    }
 
     public record UpdateResidentRequest(
             @NotBlank(message = "NIM wajib diisi")
@@ -47,8 +63,23 @@ public final class AdminDtos {
             ResidenceCategory residenceCategory,
 
             String building,
-            String roomNumber
-    ) {}
+            String roomNumber,
+            String hallName
+    ) {
+        @JsonCreator
+        public UpdateResidentRequest {}
+
+        public UpdateResidentRequest(
+                String nim,
+                String fullName,
+                ResidentStatus status,
+                ResidenceCategory residenceCategory,
+                String building,
+                String roomNumber
+        ) {
+            this(nim, fullName, status, residenceCategory, building, roomNumber, null);
+        }
+    }
 
     public record ChangeResidentStatusRequest(
             @NotNull(message = "Status baru (AKTIF atau NONAKTIF) wajib diisi")
@@ -81,8 +112,21 @@ public final class AdminDtos {
             @Size(min = 8, max = 72)
             String password,
 
-            @NotNull(message = "Role petugas (MONITOR, VILLAGE_DEAN, atau ADMIN) wajib diisi")
-            UserRole role
+            @NotNull(message = "Role petugas (MONITOR atau ADMIN) wajib diisi")
+            UserRole role,
+
+            String hallName
+    ) {
+        @JsonCreator
+        public CreateStaffUserRequest {}
+
+        public CreateStaffUserRequest(String username, String email, String password, UserRole role) {
+            this(username, email, password, role, null);
+        }
+    }
+
+    public record ChangeUserHallRequest(
+            String hallName
     ) {}
 
     public record ResetUserPasswordRequest(
@@ -113,6 +157,26 @@ public final class AdminDtos {
             OffsetDateTime lockedUntil,
             OffsetDateTime lastLoginAt,
             OffsetDateTime createdAt,
-            OffsetDateTime updatedAt
-    ) {}
+            OffsetDateTime updatedAt,
+            String hallName
+    ) {
+        public UserAccountDto(
+                UUID id,
+                UUID residentId,
+                String residentNim,
+                String residentName,
+                String username,
+                String email,
+                UserRole role,
+                boolean isActive,
+                int failedLoginAttempts,
+                OffsetDateTime lockedUntil,
+                OffsetDateTime lastLoginAt,
+                OffsetDateTime createdAt,
+                OffsetDateTime updatedAt
+        ) {
+            this(id, residentId, residentNim, residentName, username, email, role,
+                    isActive, failedLoginAttempts, lockedUntil, lastLoginAt, createdAt, updatedAt, null);
+        }
+    }
 }

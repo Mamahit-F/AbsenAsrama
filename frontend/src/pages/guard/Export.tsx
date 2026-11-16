@@ -10,10 +10,146 @@ import {
   type PeriodRecapReportDto,
   type SessionDto,
 } from "../../api";
-import { useToast } from "../../state/app";
-import { fmtMethodLabel, shiftDate, toWitaDate, toWitaTime, wita, witaDayEndIso, witaDayStartIso } from "../../lib/utils";
+import { useAuth, useToast } from "../../state/app";
+import { TZ, fmtMethodLabel, shiftDate, toWitaDate, toWitaTime, wita, witaDayEndIso, witaDayStartIso } from "../../lib/utils";
+
+const CSV_DELIMITER = ";";
+
+const CSV_COLUMNS = [
+  "No",
+  "NIM",
+  "Nama Penghuni",
+  "Hall",
+  "Gedung",
+  "Kamar",
+  "Tanggal",
+  "Waktu (WITA)",
+  "Nama Sesi",
+  "Status",
+  "Metode",
+  "Nama Penjaga",
+  "Alasan / Koreksi",
+  "Geofencing",
+  "Jarak (m)",
+  "Akurasi GPS (m)",
+  "Koordinat Pengguna",
+  "Koordinat Sesi",
+] as const;
+
+function sanitizeCsvText(raw: string | null | undefined, fallback = "-"): string {
+  const value = (raw ?? "").trim();
+  if (!value) return fallback;
+  const first = value[0];
+  if (first === "=" || first === "+" || first === "@" || first === "\t" || first === "\r" || (first === "-" && value.length > 1)) {
+    return `'${value}`;
+  }
+  return value;
+}
+
+function encodeCsvCell(value: string | number, delimiter: string): string {
+  const str = String(value);
+  if (str.includes(delimiter) || str.includes('"') || str.includes("\n") || str.includes("\r")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function formatWitaHms(iso: string | null | undefined): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+function formatCoords(lat?: number | null, lon?: number | null, radiusM?: number | null): string {
+  if (lat == null || lon == null) return "-";
+  const base = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+  return radiusM != null ? `${base} (${radiusM}m)` : base;
+}
+
+function formatNotes(reason?: string | null, correctionReason?: string | null): string {
+  const r = reason?.trim() ?? "";
+  const c = correctionReason?.trim() ?? "";
+  if (!r && !c) return "-";
+  if (r && c && r !== c) return sanitizeCsvText(`${r} | Koreksi: ${c}`);
+  return sanitizeCsvText(r || c);
+}
+
+function buildStructuredAttendanceCsv({
+  report,
+  delimiter,
+  hallLabel,
+  startDate,
+  endDate,
+  sessionLabel,
+}: {
+  report: PeriodRecapReportDto;
+  delimiter: string;
+  hallLabel: string;
+  startDate: string;
+  endDate: string;
+  sessionLabel: string;
+}): string {
+  const toLine = (cells: (string | number)[]) =>
+    cells.map((cell) => encodeCsvCell(cell, delimiter)).join(delimiter);
+
+  const nowWita = `${wita().date} ${formatWitaHms(new Date().toISOString())} WITA`;
+  const lines: string[] = [
+    toLine(["LAPORAN REKAPITULASI PRESENSI ASRAMA"]),
+    toLine(["Hall / Asrama", sanitizeCsvText(hallLabel, "Semua Hall")]),
+    toLine(["Periode", `${startDate} s/d ${endDate}`]),
+    toLine(["Filter Sesi", sanitizeCsvText(sessionLabel, "Semua sesi presensi")]),
+    toLine(["Diekspor Pada", nowWita]),
+    toLine([
+      "Ringkasan",
+      `Total: ${report.totalRecords} | Hadir: ${report.hadirCount} | Tidak Hadir: ${report.tidakHadirCount} | Scan: ${report.scanCount} | Dibantu Penjaga: ${report.guardAssistedCount} | Manual: ${report.manualCount}`,
+    ]),
+    "",
+    toLine([...CSV_COLUMNS]),
+  ];
+
+  report.rows.forEach((r, idx) => {
+    const refTime = r.recordedAt || r.sessionStartsAt;
+    const isHadir = r.status === "HADIR";
+    const geoOn = Boolean(r.isGeoEnabled);
+    const dist = r.distanceMeters ?? r.distanceM;
+    const guardUser = r.recordedByUsername?.trim() ? sanitizeCsvText(`@${r.recordedByUsername.trim()}`) : "-";
+
+    lines.push(
+      toLine([
+        idx + 1,
+        sanitizeCsvText(r.residentNim),
+        sanitizeCsvText(r.residentName),
+        sanitizeCsvText(r.hallName),
+        sanitizeCsvText(r.building),
+        sanitizeCsvText(r.roomNumber),
+        refTime ? toWitaDate(refTime) : "-",
+        formatWitaHms(refTime),
+        sanitizeCsvText(r.scheduleName),
+        isHadir ? "Hadir" : "Tidak Hadir",
+        r.method ? fmtMethodLabel(r.method) : "-",
+        guardUser,
+        formatNotes(r.reason, r.correctionReason),
+        geoOn ? "Aktif" : "Lokasi Bebas",
+        geoOn && dist != null ? dist.toFixed(1) : "-",
+        r.userAccuracyM != null ? r.userAccuracyM.toFixed(1) : "-",
+        formatCoords(r.userLatitude, r.userLongitude),
+        geoOn ? formatCoords(r.sessionLatitude, r.sessionLongitude, r.sessionRadiusM) : "-",
+      ]),
+    );
+  });
+
+  return `\uFEFF${lines.join("\r\n")}\r\n`;
+}
 
 export default function ExportCsv() {
+  const { user } = useAuth();
   const toast = useToast();
   const today = wita().date;
 
@@ -63,18 +199,35 @@ export default function ExportCsv() {
     if (downloading) return;
     setDownloading(true);
     try {
-      const blob = await reportsApi.exportAttendanceCsv({
+      const latestReport = await reportsApi.getAttendanceReport({
         from: witaDayStartIso(startDate),
         to: witaDayEndIso(endDate),
         sessionId: sessionFilter === "all" ? undefined : sessionFilter,
       });
+      setReport(latestReport);
+
+      const selectedSession = sessions.find((s) => s.id === sessionFilter);
+      const sessionLabel = selectedSession
+        ? `${selectedSession.scheduleName} (${toWitaDate(selectedSession.startsAt)} ${toWitaTime(selectedSession.startsAt)})`
+        : "Semua sesi presensi";
+
+      const csvText = buildStructuredAttendanceCsv({
+        report: latestReport,
+        delimiter: CSV_DELIMITER,
+        hallLabel: user?.hallName ?? "Semua Hall",
+        startDate,
+        endDate,
+        sessionLabel,
+      });
+
+      const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `rekap-presensi-${startDate}-sd-${endDate}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      toast(`Rekap CSV (${rows.length} baris) berhasil diunduh`);
+      toast(`Rekap CSV terstruktur (${latestReport.rows.length} baris) berhasil diunduh`);
     } catch (e) {
       toast(isApiError(e) ? e.message : "Gagal mengunduh berkas CSV dari server.", "error");
     } finally {
@@ -84,7 +237,10 @@ export default function ExportCsv() {
 
   return (
     <Page>
-      <PageHead eyebrow="Ekspor CSV per periode" title="Rekap" />
+      <PageHead
+        eyebrow={user?.hallName ? `Ekspor CSV · ${user.hallName}` : "Ekspor CSV per periode"}
+        title="Rekap"
+      />
 
       {error && (
         <Card className="mb-3 flex items-center justify-between gap-3 p-4">
@@ -111,16 +267,16 @@ export default function ExportCsv() {
             ))}
           </SelectField>
 
-          <div className="grid grid-cols-3 gap-2 pt-1 text-center">
-            <div className="soft-inset rounded-2xl p-2.5">
+          <div className="grid grid-cols-3 divide-x divide-line border-y border-line py-2.5 text-center">
+            <div className="px-2">
               <p className="font-display text-base font-semibold tabular">{rows.length}</p>
               <p className="text-[11px] font-semibold text-muted">Total baris</p>
             </div>
-            <div className="soft-inset rounded-2xl p-2.5">
+            <div className="px-2">
               <p className="font-display text-base font-semibold text-success tabular">{hadir}</p>
               <p className="text-[11px] font-semibold text-muted">Hadir</p>
             </div>
-            <div className="soft-inset rounded-2xl p-2.5">
+            <div className="px-2">
               <p className="font-display text-base font-semibold text-danger tabular">{tidakHadir}</p>
               <p className="text-[11px] font-semibold text-muted">Tidak Hadir</p>
             </div>
@@ -133,28 +289,13 @@ export default function ExportCsv() {
             onClick={downloadCsv}
             icon={<Download className="size-5" />}
           >
-            {downloading ? "Mengunduh berkas CSV…" : `Unduh berkas CSV (${rows.length} baris)`}
+            {downloading ? "Menyiapkan berkas CSV…" : `Unduh berkas CSV (${rows.length} baris)`}
           </Button>
         </Card>
 
-        <SectionTitle>Kolom standar CSV (J-08)</SectionTitle>
+        <SectionTitle>Struktur kolom CSV ({CSV_COLUMNS.length} kolom)</SectionTitle>
         <Item className="soft-inset flex flex-wrap gap-1.5 rounded-2xl p-3.5">
-          {[
-            "NIM",
-            "Nama",
-            "Tanggal",
-            "Waktu",
-            "Nama Sesi",
-            "Status (Hadir/Tidak Hadir)",
-            "Metode (Scan/Dibantu Penjaga/Manual)",
-            "Nama Penjaga",
-            "Alasan",
-            "Geofencing",
-            "Jarak (m)",
-            "Akurasi GPS (m)",
-            "Koordinat Pengguna",
-            "Koordinat Sesi",
-          ].map((col) => (
+          {CSV_COLUMNS.map((col) => (
             <Badge key={col} tone="info">
               {col}
             </Badge>
@@ -170,7 +311,7 @@ export default function ExportCsv() {
               const isHadir = r.status === "HADIR";
               const mLabel = fmtMethodLabel(r.method);
               return (
-                <Item key={r.recordId} className="soft-inset rounded-2xl p-3 text-xs">
+                <Item key={r.recordId} data-glass="card" data-radius="16" className="glass rounded-2xl p-3 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold">{r.residentName}</span>
                     <Badge tone={isHadir ? "success" : "danger"}>

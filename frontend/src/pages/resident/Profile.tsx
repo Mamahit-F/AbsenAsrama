@@ -67,7 +67,7 @@ export default function ResidentProfile() {
 
     setSavingPw(true);
     try {
-      const res = await changePassword(pw.old, pw.next);
+      const res = await changePassword(pw.old, pw.next, pw.confirm);
       if (!res.ok) {
         setErr(res.error);
         return;
@@ -82,12 +82,12 @@ export default function ResidentProfile() {
 
   return (
     <Page>
-      <NightHeader className="pb-24 text-center">
+      <NightHeader className="pb-6 text-center">
         <motion.div
           initial={{ scale: 0.7, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ ...spring, delay: 0.1 }}
-          className="mx-auto mt-6 w-fit rounded-full p-1.5"
+          className="mx-auto mt-3 w-fit rounded-full p-1.5"
           style={{ background: "var(--grad-accent)" }}
         >
           <Avatar name={displayName} size={88} className="ring-0" />
@@ -96,14 +96,24 @@ export default function ResidentProfile() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease: easeOut, delay: 0.15 }}
-          className="mt-4 text-[26px] font-bold text-white"
+          className="hero-metric-wrap mt-4 text-[26px] font-bold ink-1"
         >
           {displayName}
         </motion.h1>
-        <p className="mt-0.5 font-display text-[13px] text-night-muted tabular">
+        <p className="mt-0.5 font-display text-[13px] ink-4 tabular">
           NIM {displayNim} · Kamar {roomDisplay}
         </p>
-        <div className="mt-4 flex justify-center gap-2">
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          {profile?.hallName ? (
+            <span data-wave-sync="" className="micro-glass inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-display text-xs font-semibold ink-teal">
+              <span className="size-1.5 rounded-full bg-current" />
+              Terdaftar di {profile.hallName}
+            </span>
+          ) : (
+            <span data-wave-sync="" className="micro-glass inline-flex items-center gap-1.5 rounded-full px-3 py-1 font-display text-xs font-semibold text-warning">
+              Belum Terdaftar di Hall
+            </span>
+          )}
           <Badge tone="navy" dot>
             {isActive ? "Penghuni aktif" : "Dinonaktifkan"}
           </Badge>
@@ -124,6 +134,13 @@ export default function ResidentProfile() {
       <Card className="divide-y divide-line p-2">
         <div className="flex items-center gap-3 px-3 py-3">
           <IdCard className="size-5 text-primary" aria-hidden />
+          <span className="flex-1 text-sm font-semibold text-muted">Hall Asrama</span>
+          <span className={`text-sm font-semibold ${profile?.hallName ? "text-primary" : "text-amber-500 font-bold"}`}>
+            {profile?.hallName ? `Terdaftar di ${profile.hallName}` : "Belum Terdaftar — Hubungi Monitor"}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 px-3 py-3">
+          <IdCard className="size-5 text-primary" aria-hidden />
           <span className="flex-1 text-sm font-semibold text-muted">NIM resmi</span>
           <span className="font-display text-sm font-semibold">{displayNim}</span>
         </div>
@@ -142,7 +159,7 @@ export default function ResidentProfile() {
       <SectionTitle>Data wajah & keamanan</SectionTitle>
       <div className="space-y-2.5">
         <PressCard onClick={() => nav(profile?.hasActiveConsent ? "/penghuni/daftar-wajah" : "/penghuni/persetujuan")} className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-2xl soft-sm text-primary">
+          <span className="grid size-10 place-items-center rounded-2xl bg-primary/10 text-primary">
             <RefreshCcw className="size-5" aria-hidden />
           </span>
           <div className="flex-1">
@@ -152,7 +169,7 @@ export default function ResidentProfile() {
         </PressCard>
 
         <PressCard onClick={() => nav("/penghuni/persetujuan")} className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-2xl soft-sm text-primary">
+          <span className="grid size-10 place-items-center rounded-2xl bg-primary/10 text-primary">
             <FileCheck2 className="size-5" aria-hidden />
           </span>
           <div className="flex-1">
@@ -172,7 +189,7 @@ export default function ResidentProfile() {
         </PressCard>
 
         <PressCard onClick={() => setPwOpen(true)} className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-2xl soft-sm text-primary">
+          <span className="grid size-10 place-items-center rounded-2xl bg-primary/10 text-primary">
             <KeyRound className="size-5" aria-hidden />
           </span>
           <div className="flex-1">

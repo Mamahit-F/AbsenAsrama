@@ -2,8 +2,6 @@
 CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA extensions;
 CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA extensions;
 
-ALTER TYPE public.user_role ADD VALUE IF NOT EXISTS 'VILLAGE_DEAN';
-
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname='residence_category' AND typnamespace='public'::regnamespace) THEN
     CREATE TYPE public.residence_category AS ENUM ('ASRAMA','LUAR_DEKAT','LUAR_JAUH');

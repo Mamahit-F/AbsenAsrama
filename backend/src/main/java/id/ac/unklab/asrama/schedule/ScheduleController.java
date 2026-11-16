@@ -33,6 +33,22 @@ public class ScheduleController {
         return ResponseEntity.ok(ApiResponse.ok("Daftar jenis kegiatan", scheduleService.listActivityTypes()));
     }
 
+    @GetMapping("/settings")
+    @Operation(summary = "Mendapatkan pengaturan batas maksimal sesi presensi per hari (1-3)")
+    public ResponseEntity<ApiResponse<ScheduleSettingsDto>> getScheduleSettings() {
+        return ResponseEntity.ok(ApiResponse.ok("Pengaturan sesi harian", scheduleService.getScheduleSettings()));
+    }
+
+    @PutMapping("/settings")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Mengatur batas maksimal sesi presensi per hari (custom 1 hingga 3 sesi/hari) khusus ADMIN")
+    public ResponseEntity<ApiResponse<ScheduleSettingsDto>> updateScheduleSettings(
+            @Valid @RequestBody UpdateScheduleSettingsRequest request
+    ) {
+        ScheduleSettingsDto updated = scheduleService.updateMaxDailySessions(request.maxDailySessions());
+        return ResponseEntity.ok(ApiResponse.ok("Pengaturan batas sesi harian berhasil disimpan", updated));
+    }
+
     @GetMapping
     @Operation(summary = "Daftar seluruh jadwal kegiatan (sekali waktu maupun berulang)")
     public ResponseEntity<ApiResponse<List<ScheduleDto>>> listSchedules(
@@ -48,7 +64,7 @@ public class ScheduleController {
     }
 
     @GetMapping("/{scheduleId}/history")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR', 'VILLAGE_DEAN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
     @Operation(summary = "Riwayat perubahan jadwal kegiatan (audit trail jadwal)")
     public ResponseEntity<ApiResponse<List<ScheduleHistoryEntryDto>>> getScheduleHistory(@PathVariable UUID scheduleId) {
         return ResponseEntity.ok(ApiResponse.ok("Riwayat perubahan jadwal", scheduleService.getScheduleHistory(scheduleId)));
@@ -72,6 +88,14 @@ public class ScheduleController {
     ) {
         ScheduleDto updated = scheduleService.updateSchedule(scheduleId, request);
         return ResponseEntity.ok(ApiResponse.ok("Jadwal kegiatan berhasil diperbarui", updated));
+    }
+
+    @DeleteMapping("/{scheduleId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
+    @Operation(summary = "Menghapus jadwal kegiatan beserta sesi presensi terkait")
+    public ResponseEntity<ApiResponse<Void>> deleteSchedule(@PathVariable UUID scheduleId) {
+        scheduleService.deleteSchedule(scheduleId);
+        return ResponseEntity.ok(ApiResponse.ok("Jadwal kegiatan berhasil dihapus", null));
     }
 
     @PostMapping("/{scheduleId}/materialize")
@@ -110,7 +134,7 @@ public class ScheduleController {
     }
 
     @GetMapping("/sessions/{sessionId}/geofence")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR', 'PENGHUNI', 'VILLAGE_DEAN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR', 'PENGHUNI')")
     @Operation(summary = "Mendapatkan konfigurasi geofence untuk sesi presensi")
     public ResponseEntity<ApiResponse<GeofenceDto>> getSessionGeofence(@PathVariable UUID sessionId) {
         GeofenceDto geofence = scheduleService.getSession(sessionId).geofence();
@@ -136,12 +160,23 @@ public class ScheduleController {
         return ResponseEntity.ok(ApiResponse.ok("Sesi presensi ditutup dan ketidakhadiran telah dihitung", result));
     }
 
+    @PutMapping("/sessions/{sessionId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
+    @Operation(summary = "Memperbarui data sesi presensi (jam mulai, jam selesai, status, atau geofence) kapan saja tanpa batasan (J-06, K-05)")
+    public ResponseEntity<ApiResponse<SessionDto>> updateSession(
+            @PathVariable UUID sessionId,
+            @RequestBody UpdateSessionRequest request
+    ) {
+        SessionDto updated = scheduleService.updateSession(sessionId, request);
+        return ResponseEntity.ok(ApiResponse.ok("Sesi presensi berhasil diperbarui", updated));
+    }
+
     @DeleteMapping("/sessions/{sessionId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
-    @Operation(summary = "Menghapus sesi presensi (ditolak secara permanen jika sudah memiliki riwayat presensi K-05)")
+    @Operation(summary = "Menghapus sesi presensi kapan saja tanpa batasan (J-06, K-05)")
     public ResponseEntity<ApiResponse<Void>> deleteSession(@PathVariable UUID sessionId) {
         scheduleService.deleteOrCancelSession(sessionId);
-        return ResponseEntity.ok(ApiResponse.ok("Sesi presensi yang belum memiliki riwayat berhasil dihapus", null));
+        return ResponseEntity.ok(ApiResponse.ok("Sesi presensi berhasil dihapus", null));
     }
 
     @GetMapping("/exemptions")
@@ -151,7 +186,7 @@ public class ScheduleController {
     }
 
     @PostMapping("/exemptions")
-    @PreAuthorize("hasAnyRole('ADMIN', 'VILLAGE_DEAN', 'MONITOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
     @Operation(summary = "Menambahkan hari libur atau izin pembebasan kewajiban kegiatan")
     public ResponseEntity<ApiResponse<ExemptionDto>> createExemption(@Valid @RequestBody CreateExemptionRequest request) {
         ExemptionDto created = scheduleService.createExemption(request);

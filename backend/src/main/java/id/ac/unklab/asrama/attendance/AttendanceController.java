@@ -100,7 +100,7 @@ public class AttendanceController {
     }
 
     @PatchMapping("/{recordId}/correct")
-    @PreAuthorize("hasAnyRole('MONITOR', 'ADMIN', 'VILLAGE_DEAN')")
+    @PreAuthorize("hasAnyRole('MONITOR', 'ADMIN')")
     @Operation(summary = "Mengoreksi status presensi dengan alasan koreksi wajib dan pencatatan riwayat perubahan otomatis")
     public ResponseEntity<ApiResponse<AttendanceRecordDto>> correctAttendance(
             @PathVariable UUID recordId,
@@ -111,7 +111,7 @@ public class AttendanceController {
     }
 
     @GetMapping("/sessions/{sessionId}/recap")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR', 'VILLAGE_DEAN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
     @Operation(summary = "Rekapitulasi hadir, tidak hadir, dan belum presensi pada suatu sesi")
     public ResponseEntity<ApiResponse<SessionRecapDto>> getSessionRecap(@PathVariable UUID sessionId) {
         return ResponseEntity.ok(ApiResponse.ok("Rekap sesi presensi", attendanceService.getSessionRecap(sessionId)));
@@ -149,7 +149,7 @@ public class AttendanceController {
     }
 
     @GetMapping("/dashboard")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR', 'VILLAGE_DEAN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MONITOR')")
     @Operation(summary = "Statistik ringkas dashboard presensi asrama")
     public ResponseEntity<ApiResponse<DashboardStatsDto>> getDashboardStats() {
         return ResponseEntity.ok(ApiResponse.ok("Statistik dashboard presensi", attendanceService.getDashboardStats()));
@@ -159,11 +159,13 @@ public class AttendanceController {
     @Operation(summary = "Mengecek status ketersediaan layanan AI FastAPI pengenalan wajah")
     public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getAiStatus() {
         boolean healthy = attendanceService.isAiServiceHealthy();
+        boolean starting = !healthy && attendanceService.isAiServiceStarting();
         java.util.Map<String, Object> data = java.util.Map.of(
                 "available", healthy,
                 "healthy", healthy,
+                "starting", starting,
                 "service", "FastAPI DeepFace/ArcFace AI Service",
-                "status", healthy ? "ONLINE" : "UNREACHABLE"
+                "status", healthy ? "ONLINE" : (starting ? "STARTING" : "UNREACHABLE")
         );
         return ResponseEntity.ok(ApiResponse.ok("Status layanan AI", data));
     }

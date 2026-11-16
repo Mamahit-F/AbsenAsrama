@@ -26,7 +26,6 @@ DECLARE
   v_results jsonb := '[]'::jsonb;
   v_admin_uid uuid;
   v_monitor_uid uuid;
-  v_dean_uid uuid;
   v_res1_id uuid;
   v_res2_id uuid;
   v_res3_id uuid;
@@ -82,10 +81,6 @@ BEGIN
   INSERT INTO public.users(username, email, password_hash, role, is_active)
   VALUES ('monitor_verify', 'monitor@verify.local', '$2a$10$abcdefghijklmnopqrstuv1234567890123456789012', 'MONITOR', true)
   RETURNING id INTO v_monitor_uid;
-
-  INSERT INTO public.users(username, email, password_hash, role, is_active)
-  VALUES ('dean_verify', 'dean@verify.local', '$2a$10$abcdefghijklmnopqrstuv1234567890123456789012', 'VILLAGE_DEAN', true)
-  RETURNING id INTO v_dean_uid;
 
   INSERT INTO public.residents(nim, full_name, status, residence_category, building, room_number)
   VALUES

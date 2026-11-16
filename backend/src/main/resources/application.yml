@@ -58,6 +58,10 @@ app:
     api-key: ${AI_SERVICE_API_KEY:dev-ai-internal-key}
     connect-timeout-ms: ${AI_CONNECT_TIMEOUT_MS:1000}
     read-timeout-ms: ${AI_READ_TIMEOUT_MS:2200}
+    auto-start: ${AI_AUTO_START:true}
+    python-command: ${AI_PYTHON_COMMAND:python}
+    working-dir: ${AI_SERVICE_WORKING_DIR:}
+    watchdog-interval-ms: ${AI_WATCHDOG_INTERVAL_MS:15000}
   storage:
     supabase-url: ${SUPABASE_URL:https://tjgttljfdlcwxbregzqs.supabase.co}
     service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
@@ -66,8 +70,10 @@ app:
 
 springdoc:
   api-docs:
+    enabled: ${SPRINGDOC_ENABLED:true}
     path: /v3/api-docs
   swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:true}
     path: /swagger-ui.html
     operations-sorter: method
     tags-sorter: alpha

@@ -25,6 +25,7 @@ public final class ReportDtos {
             String residenceCategory,
             String building,
             String roomNumber,
+            String hallName,
             AttendanceStatus status,
             AttendanceMethod method,
             String reason,
@@ -43,7 +44,46 @@ public final class ReportDtos {
             Integer sessionRadiusM,
             String correctionReason,
             OffsetDateTime recordedAt
-    ) {}
+    ) {
+        public AttendanceReportRowDto(
+                UUID recordId,
+                UUID sessionId,
+                String scheduleName,
+                String activityCode,
+                OffsetDateTime sessionStartsAt,
+                OffsetDateTime sessionEndsAt,
+                UUID residentId,
+                String residentNim,
+                String residentName,
+                String residenceCategory,
+                String building,
+                String roomNumber,
+                AttendanceStatus status,
+                AttendanceMethod method,
+                String reason,
+                UUID recordedBy,
+                String recordedByUsername,
+                Boolean faceMatch,
+                Boolean livenessPassed,
+                Boolean locationValid,
+                Double distanceM,
+                Boolean isGeoEnabled,
+                Double userLatitude,
+                Double userLongitude,
+                Double userAccuracyM,
+                Double sessionLatitude,
+                Double sessionLongitude,
+                Integer sessionRadiusM,
+                String correctionReason,
+                OffsetDateTime recordedAt
+        ) {
+            this(recordId, sessionId, scheduleName, activityCode, sessionStartsAt, sessionEndsAt,
+                    residentId, residentNim, residentName, residenceCategory, building, roomNumber, null,
+                    status, method, reason, recordedBy, recordedByUsername, faceMatch, livenessPassed,
+                    locationValid, distanceM, isGeoEnabled, userLatitude, userLongitude, userAccuracyM,
+                    sessionLatitude, sessionLongitude, sessionRadiusM, correctionReason, recordedAt);
+        }
+    }
 
     public record PeriodRecapReportDto(
             OffsetDateTime from,

@@ -27,19 +27,30 @@ public class ReportRepository {
             UUID sessionId,
             AttendanceStatus status
     ) {
+        return queryAttendanceReportRows(from, to, sessionId, status, null);
+    }
+
+    public List<AttendanceReportRowDto> queryAttendanceReportRows(
+            OffsetDateTime from,
+            OffsetDateTime to,
+            UUID sessionId,
+            AttendanceStatus status,
+            String hallName
+    ) {
         StringBuilder sql = new StringBuilder("""
                 SELECT ar.id AS record_id, ar.session_id, sc.name AS schedule_name, at.code AS activity_code,
                        s.starts_at AS session_starts_at, s.ends_at AS session_ends_at,
                        ar.resident_id, ar.resident_nim, ar.resident_name,
                        COALESCE(r.residence_category::text, '-') AS residence_category,
                        r.building, r.room_number,
+                       COALESCE(r.hall_name, s.hall_name, sc.hall_name) AS hall_name,
                        ar.status, ar.method, ar.reason, ar.recorded_by, u.username AS recorded_by_username,
                        ar.face_match, ar.liveness_passed, ar.location_valid, ar.distance_m,
-                       COALESCE(s.is_geo_enabled, g.is_enabled, false) AS is_geo_enabled,
+                       COALESCE(g.is_enabled, false) AS is_geo_enabled,
                        ar.latitude AS user_latitude, ar.longitude AS user_longitude, ar.accuracy_m AS user_accuracy_m,
-                       COALESCE(s.geo_latitude, g.latitude) AS session_latitude,
-                       COALESCE(s.geo_longitude, g.longitude) AS session_longitude,
-                       COALESCE(s.geo_radius_meters, g.radius_m) AS session_radius_m,
+                       g.latitude AS session_latitude,
+                       g.longitude AS session_longitude,
+                       g.radius_m AS session_radius_m,
                        ar.correction_reason, ar.recorded_at
                 FROM public.attendance_records ar
                 JOIN public.attendance_sessions s ON s.id = ar.session_id
@@ -67,6 +78,12 @@ public class ReportRepository {
             sql.append(" AND ar.status = ?::public.attendance_status");
             params.add(status.name());
         }
+        if (hallName != null && !hallName.isBlank()) {
+            sql.append(" AND (r.hall_name = ? OR s.hall_name = ? OR sc.hall_name = ?)");
+            params.add(hallName.trim());
+            params.add(hallName.trim());
+            params.add(hallName.trim());
+        }
         sql.append(" ORDER BY s.starts_at DESC, ar.resident_nim ASC");
 
         return jdbcTemplate.query(
@@ -75,6 +92,10 @@ public class ReportRepository {
                     String resId = rs.getString("resident_id");
                     String methodStr = rs.getString("method");
                     String recBy = rs.getString("recorded_by");
+                    String hName = null;
+                    try {
+                        hName = rs.getString("hall_name");
+                    } catch (Exception ignored) {}
                     return new AttendanceReportRowDto(
                             UUID.fromString(rs.getString("record_id")),
                             UUID.fromString(rs.getString("session_id")),
@@ -88,6 +109,7 @@ public class ReportRepository {
                             rs.getString("residence_category"),
                             rs.getString("building"),
                             rs.getString("room_number"),
+                            hName,
                             AttendanceStatus.valueOf(rs.getString("status")),
                             methodStr != null ? AttendanceMethod.valueOf(methodStr) : null,
                             rs.getString("reason"),

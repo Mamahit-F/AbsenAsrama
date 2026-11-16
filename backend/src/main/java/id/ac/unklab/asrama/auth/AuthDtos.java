@@ -1,5 +1,8 @@
 package id.ac.unklab.asrama.auth;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import id.ac.unklab.asrama.common.DomainEnums.ResidentStatus;
 import id.ac.unklab.asrama.common.DomainEnums.UserRole;
 import jakarta.validation.constraints.Email;
@@ -49,12 +52,27 @@ public final class AuthDtos {
 
     public record ChangePasswordRequest(
             @NotBlank(message = "Password lama wajib diisi")
+            @JsonProperty("old_password")
+            @JsonAlias({"oldPassword", "currentPassword", "current_password"})
             String currentPassword,
 
             @NotBlank(message = "Password baru wajib diisi")
-            @Size(min = 8, max = 72, message = "Password baru minimal 8 karakter")
-            String newPassword
-    ) {}
+            @Size(min = 6, max = 72, message = "Password baru minimal 6 karakter")
+            @JsonProperty("new_password")
+            @JsonAlias({"newPassword"})
+            String newPassword,
+
+            @JsonProperty("confirm_password")
+            @JsonAlias({"confirmPassword"})
+            String confirmPassword
+    ) {
+        @JsonCreator
+        public ChangePasswordRequest {}
+
+        public ChangePasswordRequest(String currentPassword, String newPassword) {
+            this(currentPassword, newPassword, null);
+        }
+    }
 
     public record AuthTokenResponse(
             String accessToken,
@@ -71,8 +89,13 @@ public final class AuthDtos {
             UserRole role,
             UUID residentId,
             ResidentStatus residentStatus,
-            boolean isActive
-    ) {}
+            boolean isActive,
+            String hallName
+    ) {
+        public UserSessionDto(UUID userId, String username, String email, UserRole role, UUID residentId, ResidentStatus residentStatus, boolean isActive) {
+            this(userId, username, email, role, residentId, residentStatus, isActive, null);
+        }
+    }
 
     public record UserLoginLookupRow(
             UUID id,
@@ -85,6 +108,11 @@ public final class AuthDtos {
             boolean isActive,
             int failedLoginAttempts,
             OffsetDateTime lockedUntil,
-            boolean isLocked
-    ) {}
+            boolean isLocked,
+            String hallName
+    ) {
+        public UserLoginLookupRow(UUID id, String username, String email, String passwordHash, UserRole role, UUID residentId, ResidentStatus residentStatus, boolean isActive, int failedLoginAttempts, OffsetDateTime lockedUntil, boolean isLocked) {
+            this(id, username, email, passwordHash, role, residentId, residentStatus, isActive, failedLoginAttempts, lockedUntil, isLocked, null);
+        }
+    }
 }

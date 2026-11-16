@@ -21,18 +21,23 @@ public class AuthRepository {
         String roleStr = rs.getString("role");
         String resStatusStr = rs.getString("resident_status");
         String resIdStr = rs.getString("resident_id");
+        String hallName = null;
+        try {
+            hallName = rs.getString("hall_name");
+        } catch (Exception ignored) {}
         return new UserLoginLookupRow(
                 UUID.fromString(rs.getString("id")),
                 rs.getString("username"),
                 rs.getString("email"),
                 rs.getString("password_hash"),
-                roleStr != null ? UserRole.valueOf(roleStr) : null,
+                UserRole.fromDatabase(roleStr),
                 resIdStr != null ? UUID.fromString(resIdStr) : null,
                 resStatusStr != null ? ResidentStatus.valueOf(resStatusStr) : null,
                 rs.getBoolean("is_active"),
                 rs.getInt("failed_login_attempts"),
                 rs.getObject("locked_until", OffsetDateTime.class),
-                rs.getBoolean("is_locked")
+                rs.getBoolean("is_locked"),
+                hallName
         );
     };
 
@@ -42,8 +47,21 @@ public class AuthRepository {
 
     public Optional<UserLoginLookupRow> findUserForLogin(String identifier) {
         List<UserLoginLookupRow> rows = jdbcTemplate.query(
-                "SELECT * FROM public.get_user_for_login(?)",
+                """
+                SELECT u.id, u.username, u.email, u.password_hash, u.role, u.resident_id,
+                       r.status AS resident_status, u.is_active, u.failed_login_attempts,
+                       u.locked_until, COALESCE(u.locked_until > now(), false) AS is_locked,
+                       COALESCE(u.hall_name, r.hall_name) AS hall_name
+                FROM public.users u
+                LEFT JOIN public.residents r ON r.id = u.resident_id
+                WHERE lower(u.username) = lower(trim(?))
+                   OR (u.email IS NOT NULL AND lower(u.email) = lower(trim(?)))
+                   OR (r.nim IS NOT NULL AND r.nim = trim(?))
+                LIMIT 1
+                """,
                 LOGIN_ROW_MAPPER,
+                identifier,
+                identifier,
                 identifier
         );
         return rows.stream().findFirst();
@@ -82,7 +100,8 @@ public class AuthRepository {
                 """
                 SELECT u.id, u.username, u.email, u.password_hash, u.role, u.resident_id,
                        r.status AS resident_status, u.is_active, u.failed_login_attempts,
-                       u.locked_until, COALESCE(u.locked_until > now(), false) AS is_locked
+                       u.locked_until, COALESCE(u.locked_until > now(), false) AS is_locked,
+                       COALESCE(u.hall_name, r.hall_name) AS hall_name
                 FROM public.users u
                 LEFT JOIN public.residents r ON r.id = u.resident_id
                 WHERE u.id = ?::uuid

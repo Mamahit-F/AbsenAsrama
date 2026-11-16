@@ -1,5 +1,6 @@
 package id.ac.unklab.asrama.attendance;
 
+import id.ac.unklab.asrama.ai.AiAutoStartService;
 import id.ac.unklab.asrama.ai.AiDtos.AiAttendanceScanRequest;
 import id.ac.unklab.asrama.ai.AiDtos.AiAttendanceScanResponse;
 import id.ac.unklab.asrama.ai.FastApiAiClient;
@@ -15,13 +16,16 @@ import id.ac.unklab.asrama.security.SecurityUtils;
 import id.ac.unklab.asrama.storage.SupabaseStorageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,6 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AttendanceService {
 
     private static final Logger log = LoggerFactory.getLogger(AttendanceService.class);
+    private static final ZoneId WITA_ZONE = ZoneId.of("Asia/Makassar");
+    private static final int MAX_HISTORY_EDIT_DAYS = 7;
 
     private final AttendanceRepository attendanceRepository;
     private final ResidentRepository residentRepository;
@@ -37,6 +43,12 @@ public class AttendanceService {
     private final FastApiAiClient aiClient;
     private final AppProperties appProperties;
     private final SecurityUtils securityUtils;
+    private volatile AiAutoStartService aiAutoStartService;
+
+    @Autowired(required = false)
+    void setAiAutoStartService(AiAutoStartService aiAutoStartService) {
+        this.aiAutoStartService = aiAutoStartService;
+    }
 
     // Idempotency cache untuk mencegah duplikasi request ketika jaringan terputus/retry
     private final Map<String, CachedScanResult> idempotencyCache = new ConcurrentHashMap<>();
@@ -160,6 +172,20 @@ public class AttendanceService {
         if (!resident.hasActiveFaceProfile()) {
             throw BusinessException.badRequest("FACE_PROFILE_NOT_ENROLLED",
                     "Penghuni belum memiliki profil wajah aktif. Silakan lakukan pendaftaran wajah terlebih dahulu.");
+        }
+
+        // Perubahan 3 (P-06, P-07): Validasi isolasi Hall
+        String sessionHall = session.hallName();
+        if (sessionHall != null && !sessionHall.isBlank()) {
+            String residentHall = resident.hallName();
+            if (residentHall == null || residentHall.isBlank()) {
+                throw BusinessException.badRequest("HALL_UNASSIGNED",
+                        "Penghuni belum terdaftar di Hall asrama manapun. Silakan hubungi Monitor Hall Anda.");
+            }
+            if (!sessionHall.equalsIgnoreCase(residentHall.trim())) {
+                throw BusinessException.badRequest("HALL_MISMATCH",
+                        "Sesi presensi ini hanya untuk penghuni " + sessionHall + " (Hall Anda: " + residentHall + ")");
+            }
         }
 
         // Periksa apakah sudah presensi di sesi ini (P-09)
@@ -375,8 +401,16 @@ public class AttendanceService {
         if (request.reason() == null || request.reason().trim().isEmpty()) {
             throw BusinessException.badRequest("REASON_REQUIRED", "Alasan wajib diisi untuk presensi manual (J-03)");
         }
-        scheduleRepository.findSessionById(request.sessionId())
+        scheduleRepository.closeExpiredOpenSessions();
+        SessionDto session = scheduleRepository.findSessionById(request.sessionId())
                 .orElseThrow(() -> BusinessException.notFound("SESSION_NOT_FOUND", "Sesi presensi tidak ditemukan"));
+
+        if (session.status() == SessionStatus.CANCELLED) {
+            throw BusinessException.badRequest("SESSION_CANCELLED", "Sesi presensi telah dibatalkan dan tidak dapat menerima pencatatan manual");
+        }
+
+        assertMonitorSessionAccess(session, "mencatat presensi manual");
+        assertWithinOneWeekHistory(session);
 
         ResidentProfileDto resident = residentRepository.findById(request.residentId())
                 .orElseThrow(() -> BusinessException.notFound("RESIDENT_NOT_FOUND", "Penghuni tidak ditemukan"));
@@ -385,19 +419,36 @@ public class AttendanceService {
             throw BusinessException.badRequest("RESIDENT_INACTIVE", "Penghuni tidak berstatus aktif");
         }
 
+        // Konsistensi isolasi Hall pada presensi manual (sama dengan scan wajah)
+        String residentHall = resident.hallName();
+        String sessionHall = session.hallName();
+        if (sessionHall != null && !sessionHall.isBlank()) {
+            if (residentHall == null || residentHall.isBlank()) {
+                throw BusinessException.badRequest("HALL_UNASSIGNED",
+                        "Penghuni " + resident.fullName() + " belum terdaftar di Hall asrama manapun. Daftarkan NIM ke Hall terlebih dahulu.");
+            }
+            if (!sessionHall.equalsIgnoreCase(residentHall.trim())) {
+                throw BusinessException.badRequest("HALL_MISMATCH",
+                        "Penghuni " + resident.fullName() + " terdaftar di " + residentHall + ", tidak dapat dipresensi manual pada sesi " + sessionHall);
+            }
+        }
+
         Optional<AttendanceRecordDto> existing = attendanceRepository.findBySessionAndResident(request.sessionId(), request.residentId());
         if (existing.isPresent()) {
             throw BusinessException.conflict("ALREADY_ATTENDED",
                     "Penghuni ini sudah memiliki catatan presensi pada sesi tersebut. Gunakan fitur koreksi jika ingin mengubah status.");
         }
 
+        AttendanceMethod manualMethod = request.status() == AttendanceStatus.TIDAK_HADIR
+                ? null
+                : AttendanceMethod.MANUAL;
         UUID recordId = attendanceRepository.insertAttendanceRecord(
                 request.sessionId(),
                 resident.id(),
                 resident.nim(),
                 resident.fullName(),
                 request.status(),
-                AttendanceMethod.MANUAL,
+                manualMethod,
                 request.reason().trim(),
                 securityUtils.getCurrentUserId(),
                 null,
@@ -412,12 +463,29 @@ public class AttendanceService {
     }
 
     /**
-     * Koreksi status presensi oleh MONITOR, ADMIN, atau VILLAGE_DEAN dengan riwayat perubahan (K-03).
+     * Koreksi status presensi oleh MONITOR atau ADMIN dengan riwayat perubahan (K-03), maksimal 7 hari ke belakang.
      */
     @Transactional
     public AttendanceRecordDto correctAttendance(UUID recordId, CorrectAttendanceRequest request) {
-        attendanceRepository.findById(recordId)
+        scheduleRepository.closeExpiredOpenSessions();
+        AttendanceRecordDto existingRecord = attendanceRepository.findById(recordId)
                 .orElseThrow(() -> BusinessException.notFound("RECORD_NOT_FOUND", "Catatan presensi tidak ditemukan"));
+        SessionDto session = scheduleRepository.findSessionById(existingRecord.sessionId())
+                .orElseThrow(() -> BusinessException.notFound("SESSION_NOT_FOUND", "Sesi presensi tidak ditemukan"));
+        if (session.status() == SessionStatus.CANCELLED) {
+            throw BusinessException.badRequest("SESSION_CANCELLED", "Sesi presensi telah dibatalkan dan riwayatnya tidak dapat diubah");
+        }
+        assertMonitorSessionAccess(session, "mengubah riwayat presensi");
+        assertWithinOneWeekHistory(session);
+        if (securityUtils.hasRole("ROLE_MONITOR")
+                && (existingRecord.method() == AttendanceMethod.SCAN
+                || existingRecord.method() == AttendanceMethod.DIBANTU_PENJAGA)) {
+            throw BusinessException.forbidden(
+                    "FACE_SCAN_ATTENDANCE_LOCKED",
+                    "Status presensi yang sudah tercatat melalui Scan Wajah tidak dapat diubah atau diedit oleh Penjaga."
+            );
+        }
+
         attendanceRepository.updateAttendanceRecord(
                 recordId,
                 request.status(),
@@ -470,29 +538,87 @@ public class AttendanceService {
     }
 
     public boolean isAiServiceHealthy() {
-        return aiClient.checkHealth();
+        boolean healthy = aiClient.checkHealth();
+        if (!healthy && aiAutoStartService != null) {
+            aiAutoStartService.triggerStartIfOffline();
+        }
+        return healthy;
     }
 
-    @Transactional(readOnly = true)
+    public boolean isAiServiceStarting() {
+        return aiAutoStartService != null && aiAutoStartService.isStarting();
+    }
+
+    @Transactional
     public DashboardStatsDto getDashboardStats() {
-        return attendanceRepository.computeDashboardStats();
+        scheduleRepository.closeExpiredOpenSessions();
+        String hallName = null;
+        if (securityUtils.hasRole("ROLE_MONITOR")) {
+            hallName = securityUtils.getCurrentHallName();
+        }
+        return attendanceRepository.computeDashboardStats(hallName);
+    }
+
+    private void assertMonitorSessionAccess(SessionDto session, String actionLabel) {
+        if (securityUtils.hasRole("ROLE_MONITOR")) {
+            String monitorHall = securityUtils.getCurrentHallName();
+            if (session.hallName() != null && monitorHall != null && !session.hallName().equalsIgnoreCase(monitorHall)) {
+                throw BusinessException.forbidden("FORBIDDEN_HALL",
+                        "Anda tidak memiliki izin untuk " + actionLabel + " pada sesi milik " + session.hallName());
+            }
+        }
+    }
+
+    private void assertWithinOneWeekHistory(SessionDto session) {
+        if (session.startsAt() == null) {
+            return;
+        }
+        LocalDate todayWita = OffsetDateTime.now(WITA_ZONE).toLocalDate();
+        LocalDate sessionDateWita = session.startsAt().atZoneSameInstant(WITA_ZONE).toLocalDate();
+        if (sessionDateWita.isBefore(todayWita.minusDays(MAX_HISTORY_EDIT_DAYS))) {
+            throw BusinessException.badRequest(
+                    "HISTORY_EDIT_EXPIRED",
+                    "Riwayat presensi hanya dapat dicatat atau diedit maksimal 7 hari (1 minggu) ke belakang."
+            );
+        }
     }
 
     private SessionDto resolveAndValidateActiveSession(UUID requestedSessionId) {
+        scheduleRepository.closeExpiredOpenSessions();
         SessionDto session;
+        String hallName = resolveEffectiveHallNameForCurrentUser();
         if (requestedSessionId != null) {
             session = scheduleRepository.findSessionById(requestedSessionId)
                     .orElseThrow(() -> BusinessException.badRequest("NO_ACTIVE_SESSION", "Tidak ada sesi presensi aktif"));
         } else {
-            session = scheduleRepository.findCurrentActiveOpenSession()
-                    .orElseThrow(() -> BusinessException.badRequest("NO_ACTIVE_SESSION", "Tidak ada sesi presensi aktif"));
+            session = scheduleRepository.findCurrentActiveOpenSessionForHall(hallName)
+                    .orElseThrow(() -> BusinessException.badRequest("NO_ACTIVE_SESSION",
+                            hallName != null
+                                    ? "Tidak ada sesi presensi aktif untuk " + hallName
+                                    : "Tidak ada sesi presensi aktif"));
         }
 
         OffsetDateTime now = OffsetDateTime.now();
-        if (session.status() != SessionStatus.OPEN || now.isBefore(session.startsAt()) || !now.isBefore(session.endsAt())) {
+        if (session.status() == SessionStatus.CLOSED || (session.endsAt() != null && !now.isBefore(session.endsAt()))) {
+            throw BusinessException.badRequest(
+                    "SESSION_CLOSED",
+                    "Sesi presensi sudah ditutup karena waktu sesi telah berakhir. Scan wajah tidak tersedia; hanya presensi manual melalui akun penjaga."
+            );
+        }
+        if (session.status() != SessionStatus.OPEN || now.isBefore(session.startsAt())) {
             throw BusinessException.badRequest("NO_ACTIVE_SESSION", "Tidak ada sesi presensi aktif");
         }
         return session;
+    }
+
+    private String resolveEffectiveHallNameForCurrentUser() {
+        if (securityUtils.hasRole("ROLE_PENGHUNI")) {
+            Optional<ResidentProfileDto> resident = residentRepository.findById(securityUtils.getCurrentResidentId());
+            if (resident.isPresent()) {
+                return resident.get().hallName();
+            }
+        }
+        return securityUtils.getCurrentHallName();
     }
 
     private void validateGpsCoordinatesIfPresent(Double latitude, Double longitude, Double accuracyM) {

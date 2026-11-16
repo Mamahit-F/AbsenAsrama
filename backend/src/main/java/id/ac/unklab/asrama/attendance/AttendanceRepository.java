@@ -120,14 +120,12 @@ public class AttendanceRepository {
                     id, session_id, resident_id, method, result,
                     face_score, liveness_score, face_match, liveness_passed,
                     location_valid, distance_m, accuracy_m, latitude, longitude,
-                    user_latitude, user_longitude, user_accuracy_meters, distance_meters,
-                    location_reason, rejection_reason
+                    location_reason, rejection_reason, location_captured_at
                 ) VALUES (
                     gen_random_uuid(), ?::uuid, ?::uuid, ?::public.attendance_method, ?::public.validation_result,
                     ?, ?, ?, ?,
                     ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?,
-                    ?, ?
+                    ?, ?, CASE WHEN ?::boolean THEN now() ELSE NULL END
                 )
                 """,
                 sessionId != null ? sessionId.toString() : null,
@@ -143,12 +141,9 @@ public class AttendanceRepository {
                 accuracyM,
                 latitude,
                 longitude,
-                latitude,
-                longitude,
-                accuracyM,
-                distanceM,
                 locationReason,
-                rejectionReason
+                rejectionReason,
+                latitude != null
         );
     }
 
@@ -177,15 +172,14 @@ public class AttendanceRepository {
                     status, method, reason, recorded_by,
                     face_match, liveness_passed,
                     latitude, longitude, accuracy_m, distance_m, location_valid,
-                    user_latitude, user_longitude, user_accuracy_meters, distance_meters,
-                    location_captured_at
+                    location_captured_at, recorded_at
                 ) VALUES (
                     ?::uuid, ?::uuid, ?::uuid, ?, ?,
                     ?::public.attendance_status, ?::public.attendance_method, ?, ?::uuid,
                     ?, ?,
                     ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?,
-                    CASE WHEN ? IS NOT NULL THEN now() ELSE NULL END
+                    CASE WHEN ?::boolean THEN now() ELSE NULL END,
+                    now()
                 )
                 """,
                 id.toString(),
@@ -204,11 +198,7 @@ public class AttendanceRepository {
                 accuracyM,
                 distanceM,
                 locationValid,
-                latitude,
-                longitude,
-                accuracyM,
-                distanceM,
-                latitude
+                latitude != null
         );
         return id;
     }
@@ -269,17 +259,42 @@ public class AttendanceRepository {
     }
 
     public void updateAttendanceRecord(UUID recordId, AttendanceStatus newStatus, String correctionReason, UUID correctedBy) {
+        String trimmedReason = correctionReason.trim();
+        if (newStatus == AttendanceStatus.TIDAK_HADIR) {
+            jdbcTemplate.update(
+                    """
+                    UPDATE public.attendance_records
+                    SET status = 'TIDAK_HADIR'::public.attendance_status,
+                        method = NULL,
+                        correction_reason = ?,
+                        corrected_by = ?::uuid,
+                        corrected_at = now()
+                    WHERE id = ?::uuid
+                    """,
+                    trimmedReason,
+                    correctedBy.toString(),
+                    recordId.toString()
+            );
+            return;
+        }
         jdbcTemplate.update(
                 """
                 UPDATE public.attendance_records
-                SET status = ?::public.attendance_status,
+                SET status = 'HADIR'::public.attendance_status,
+                    method = COALESCE(method, 'MANUAL'::public.attendance_method),
+                    reason = CASE
+                        WHEN COALESCE(method, 'MANUAL'::public.attendance_method)
+                             IN ('MANUAL'::public.attendance_method, 'DIBANTU_PENJAGA'::public.attendance_method)
+                        THEN COALESCE(NULLIF(trim(reason), ''), ?)
+                        ELSE reason
+                    END,
                     correction_reason = ?,
                     corrected_by = ?::uuid,
                     corrected_at = now()
                 WHERE id = ?::uuid
                 """,
-                newStatus.name(),
-                correctionReason.trim(),
+                trimmedReason,
+                trimmedReason,
                 correctedBy.toString(),
                 recordId.toString()
         );
@@ -300,6 +315,86 @@ public class AttendanceRepository {
     }
 
     public DashboardStatsDto computeDashboardStats() {
+        return computeDashboardStats(null);
+    }
+
+    public DashboardStatsDto computeDashboardStats(String hallName) {
+        if (hallName != null && !hallName.isBlank()) {
+            String trimmedHall = hallName.trim();
+            long activeResidents = queryLong("SELECT COUNT(*) FROM public.residents WHERE status = 'AKTIF'::public.resident_status AND hall_name = ?", trimmedHall);
+            long enrolledFaces = queryLong("SELECT COUNT(*) FROM public.face_profiles fp JOIN public.residents r ON r.id = fp.resident_id WHERE r.hall_name = ?", trimmedHall);
+            long openSessions = queryLong("""
+                    SELECT COUNT(*) FROM public.attendance_sessions s
+                    JOIN public.attendance_schedules sc ON sc.id = s.schedule_id
+                    WHERE s.status = 'OPEN'::public.session_status AND (s.hall_name = ? OR (s.hall_name IS NULL AND sc.hall_name = ?))
+                    """, trimmedHall, trimmedHall);
+            long todayHadir = queryLong("""
+                    SELECT COUNT(*) FROM public.attendance_records ar
+                    JOIN public.attendance_sessions s ON s.id = ar.session_id
+                    JOIN public.attendance_schedules sc ON sc.id = s.schedule_id
+                    WHERE ar.status = 'HADIR'::public.attendance_status
+                      AND (ar.recorded_at AT TIME ZONE 'Asia/Makassar')::date = (now() AT TIME ZONE 'Asia/Makassar')::date
+                      AND (s.hall_name = ? OR (s.hall_name IS NULL AND sc.hall_name = ?))
+                    """, trimmedHall, trimmedHall);
+            long todayTidakHadir = queryLong("""
+                    SELECT COUNT(*) FROM public.attendance_records ar
+                    JOIN public.attendance_sessions s ON s.id = ar.session_id
+                    JOIN public.attendance_schedules sc ON sc.id = s.schedule_id
+                    WHERE ar.status = 'TIDAK_HADIR'::public.attendance_status
+                      AND (ar.recorded_at AT TIME ZONE 'Asia/Makassar')::date = (now() AT TIME ZONE 'Asia/Makassar')::date
+                      AND (s.hall_name = ? OR (s.hall_name IS NULL AND sc.hall_name = ?))
+                    """, trimmedHall, trimmedHall);
+            long totalHadirAll = queryLong("""
+                    SELECT COUNT(*) FROM public.attendance_records ar
+                    JOIN public.attendance_sessions s ON s.id = ar.session_id
+                    JOIN public.attendance_schedules sc ON sc.id = s.schedule_id
+                    WHERE ar.status = 'HADIR'::public.attendance_status
+                      AND (s.hall_name = ? OR (s.hall_name IS NULL AND sc.hall_name = ?))
+                    """, trimmedHall, trimmedHall);
+            long totalRecordsAll = queryLong("""
+                    SELECT COUNT(*) FROM public.attendance_records ar
+                    JOIN public.attendance_sessions s ON s.id = ar.session_id
+                    JOIN public.attendance_schedules sc ON sc.id = s.schedule_id
+                    WHERE (s.hall_name = ? OR (s.hall_name IS NULL AND sc.hall_name = ?))
+                    """, trimmedHall, trimmedHall);
+            double rate = totalRecordsAll > 0 ? Math.round((totalHadirAll * 10000.0) / totalRecordsAll) / 100.0 : 0.0;
+
+            List<SessionRecapSummaryItem> recentSessions = jdbcTemplate.query(
+                    """
+                    SELECT s.id, sc.name AS schedule_name, s.starts_at, s.ends_at, s.status,
+                           COUNT(ar.id) FILTER (WHERE ar.status = 'HADIR') AS hadir_count,
+                           COUNT(ar.id) FILTER (WHERE ar.status = 'TIDAK_HADIR') AS tidak_hadir_count
+                    FROM public.attendance_sessions s
+                    JOIN public.attendance_schedules sc ON sc.id = s.schedule_id
+                    LEFT JOIN public.attendance_records ar ON ar.session_id = s.id
+                    WHERE (s.hall_name = ? OR (s.hall_name IS NULL AND sc.hall_name = ?))
+                    GROUP BY s.id, sc.name, s.starts_at, s.ends_at, s.status
+                    ORDER BY s.starts_at DESC
+                    LIMIT 10
+                    """,
+                    (rs, rowNum) -> new SessionRecapSummaryItem(
+                            UUID.fromString(rs.getString("id")),
+                            rs.getString("schedule_name"),
+                            rs.getObject("starts_at", OffsetDateTime.class),
+                            rs.getObject("ends_at", OffsetDateTime.class),
+                            rs.getString("status"),
+                            rs.getLong("hadir_count"),
+                            rs.getLong("tidak_hadir_count")
+                    ),
+                    trimmedHall, trimmedHall
+            );
+
+            return new DashboardStatsDto(
+                    activeResidents,
+                    enrolledFaces,
+                    openSessions,
+                    todayHadir,
+                    todayTidakHadir,
+                    rate,
+                    recentSessions
+            );
+        }
+
         long activeResidents = queryLong("SELECT COUNT(*) FROM public.residents WHERE status = 'AKTIF'::public.resident_status");
         long enrolledFaces = queryLong("SELECT COUNT(*) FROM public.face_profiles");
         long openSessions = queryLong("SELECT COUNT(*) FROM public.attendance_sessions WHERE status = 'OPEN'::public.session_status");
@@ -351,8 +446,10 @@ public class AttendanceRepository {
         );
     }
 
-    private long queryLong(String sql) {
-        Long val = jdbcTemplate.queryForObject(sql, Long.class);
+    private long queryLong(String sql, Object... params) {
+        Long val = (params != null && params.length > 0)
+                ? jdbcTemplate.queryForObject(sql, Long.class, params)
+                : jdbcTemplate.queryForObject(sql, Long.class);
         return val != null ? val : 0L;
     }
 }

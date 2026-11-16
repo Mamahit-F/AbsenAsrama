@@ -36,6 +36,7 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -48,7 +49,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.username=sa",
         "spring.datasource.password=",
         "app.rls.enabled=false",
-        "app.rate-limit.auth-requests-per-minute=5"
+        "app.rate-limit.auth-requests-per-minute=5",
+        "app.ai.auto-start=false"
 })
 class SecurityAndRestIntegrationTest {
 
@@ -331,5 +333,19 @@ class SecurityAndRestIntegrationTest {
         mockMvc.perform(get("/api/v1/violations/coaching")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("14. HTTP Error Mapping: 405 Method Not Allowed & 415 Unsupported Media Type")
+    void testHttpMethodAndMediaTypeErrors() throws Exception {
+        mockMvc.perform(delete("/api/v1/auth/login"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.code").value("METHOD_NOT_ALLOWED"));
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content("plain text"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.code").value("UNSUPPORTED_MEDIA_TYPE"));
     }
 }

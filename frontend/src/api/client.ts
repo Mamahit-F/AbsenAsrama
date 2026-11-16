@@ -174,7 +174,6 @@ export interface RequestOptions extends Omit<RequestInit, "body"> {
 function isAuthPublicEndpoint(path: string): boolean {
   return (
     path.startsWith("/auth/login") ||
-    path.startsWith("/auth/register") ||
     path.startsWith("/auth/refresh")
   );
 }

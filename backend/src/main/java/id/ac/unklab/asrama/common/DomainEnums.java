@@ -7,8 +7,18 @@ public final class DomainEnums {
     public enum UserRole {
         PENGHUNI,
         MONITOR,
-        ADMIN,
-        VILLAGE_DEAN
+        ADMIN;
+
+        public static UserRole fromDatabase(String value) {
+            if (value == null || value.isBlank()) {
+                return null;
+            }
+            String normalized = value.trim().toUpperCase();
+            if ("VILLAGE_DEAN".equals(normalized)) {
+                return ADMIN;
+            }
+            return UserRole.valueOf(normalized);
+        }
     }
 
     public enum ResidentStatus {

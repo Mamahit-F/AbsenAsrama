@@ -49,7 +49,7 @@ const STYLES = `
   transition: border-color .35s cubic-bezier(.16,1,.3,1), background-color .35s cubic-bezier(.16,1,.3,1);
 }
 .cine-pill:hover { border-color: var(--pill-border-hover); background: rgba(255,255,255,.12); }
-.cine-pill-solid { background: var(--grad-accent); color: white; box-shadow: 0 16px 30px -14px rgba(217,70,239,.8); }
+.cine-pill-solid { background: var(--grad-accent); color: white; box-shadow: 0 16px 30px -14px rgba(14,143,126,.8); }
 .cine-giant {
   font-family: var(--font-display);
   font-size: 34vw;
@@ -181,7 +181,7 @@ export function CinematicFooter({
               {row.map((t, i) => (
                 <span key={i} className="flex items-center gap-6 px-3 font-display text-[12px] font-medium uppercase tracking-[0.18em] text-night-muted">
                   {t}
-                  <span className="size-1.5 rounded-full bg-[#e879f9]" />
+                  <span className="size-1.5 rounded-full bg-[#3CC4AE]" />
                 </span>
               ))}
             </div>

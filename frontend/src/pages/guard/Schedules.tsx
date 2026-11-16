@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Archive, CalendarClock, CheckCircle2, Clock3, Pencil, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { Archive, CalendarClock, CheckCircle2, Clock3, Pencil, Plus, RefreshCw, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
 import { Page, PageHead } from "../../components/layout";
 import { Badge, Button, Card, Empty, IconButton, Item, SectionTitle, Stagger } from "../../components/ui";
 import {
@@ -20,22 +20,26 @@ export default function Schedules() {
   const [schedules, setSchedules] = useState<ScheduleDto[]>([]);
   const [sessions, setSessions] = useState<SessionDto[]>([]);
   const [active, setActive] = useState<SessionDto | null>(null);
+  const [maxDailySessions, setMaxDailySessions] = useState<number>(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [showAllSessions, setShowAllSessions] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [schedList, sessList, actSess] = await Promise.all([
+      const [schedList, sessList, actSess, settings] = await Promise.all([
         schedulesApi.listSchedules(),
         schedulesApi.listSessions(),
         schedulesApi.getActiveSession(),
+        schedulesApi.getScheduleSettings().catch(() => ({ maxDailySessions: 1 })),
       ]);
       setSchedules(schedList);
       setSessions(sessList);
       setActive(actSess);
+      setMaxDailySessions(Math.max(1, Math.min(3, settings.maxDailySessions || 1)));
     } catch (e) {
       setError(isApiError(e) ? e.message : "Gagal memuat daftar jadwal dan sesi presensi.");
     } finally {
@@ -50,7 +54,7 @@ export default function Schedules() {
   const activeSchedules = schedules.filter((s) => s.status === "ACTIVE");
   const archivedSchedules = schedules.filter((s) => s.status !== "ACTIVE");
 
-  const handleArchiveSchedule = async (s: ScheduleDto) => {
+  const setScheduleStatus = async (s: ScheduleDto, status: "ACTIVE" | "INACTIVE", toastMsg: string) => {
     if (busyId) return;
     setBusyId(s.id);
     try {
@@ -65,27 +69,56 @@ export default function Schedules() {
         endTime: s.endTime,
         validFrom: s.validFrom,
         validTo: s.validTo,
-        status: "INACTIVE",
+        status,
         description: s.description,
       });
-      toast(`Jadwal "${s.name}" diarsipkan`, "info");
+      toast(toastMsg, "info");
       await loadAll();
     } catch (e) {
-      toast(isApiError(e) ? e.message : "Gagal mengarsipkan jadwal.", "error");
+      toast(isApiError(e) ? e.message : "Gagal memperbarui status jadwal.", "error");
     } finally {
       setBusyId(null);
     }
   };
 
-  const handleMaterializeToday = async (s: ScheduleDto) => {
+  const handleArchiveSchedule = (s: ScheduleDto) =>
+    setScheduleStatus(s, "INACTIVE", `Jadwal "${s.name}" diarsipkan`);
+
+  const handleRestoreSchedule = (s: ScheduleDto) =>
+    setScheduleStatus(s, "ACTIVE", `Jadwal "${s.name}" dipulihkan ke aktif`);
+
+  const handleDeleteSchedule = async (s: ScheduleDto) => {
+    if (busyId) return;
+    if (!window.confirm(`Hapus permanen jadwal "${s.name}" beserta seluruh sesi presensi di dalamnya?`)) {
+      return;
+    }
+    setBusyId(s.id);
+    try {
+      await schedulesApi.deleteSchedule(s.id);
+      toast(`Jadwal "${s.name}" berhasil dihapus`, "info");
+      await loadAll();
+    } catch (e) {
+      toast(isApiError(e) ? e.message : "Gagal menghapus jadwal.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleMaterializeSchedule = async (s: ScheduleDto) => {
     if (busyId) return;
     setBusyId(s.id);
     try {
+      const isOneTime = s.scheduleKind === "ONE_TIME";
+      const targetDate = isOneTime && s.startsAt ? toWitaDate(s.startsAt) : today;
       const res = await schedulesApi.materializeSessions(s.id, {
-        fromDate: today,
-        toDate: shiftDate(today, 7),
+        fromDate: targetDate,
+        toDate: isOneTime ? targetDate : shiftDate(today, 7),
       });
-      toast(`${res.createdSessionsCount} sesi presensi dibentuk untuk 7 hari ke depan`);
+      toast(
+        isOneTime
+          ? `${res.createdSessionsCount} sesi presensi dibentuk untuk ${fmtDate(targetDate)}`
+          : `${res.createdSessionsCount} sesi presensi dibentuk untuk 7 hari ke depan`,
+      );
       await loadAll();
     } catch (e) {
       toast(isApiError(e) ? e.message : "Gagal membentuk sesi presensi.", "error");
@@ -110,16 +143,23 @@ export default function Schedules() {
 
   const handleDeleteSession = async (sess: SessionDto) => {
     if (busyId) return;
+    if (
+      !window.confirm(
+        `Hapus permanen sesi "${sess.scheduleName}" (${fmtDate(toWitaDate(sess.startsAt))} ${toWitaTime(sess.startsAt)}–${toWitaTime(sess.endsAt)}) beserta seluruh data presensinya? Setelah dihapus permanen, Anda dapat membuat sesi baru di hari ini.`,
+      )
+    ) {
+      return;
+    }
     setBusyId(sess.id);
     try {
       await schedulesApi.deleteSession(sess.id);
-      toast("Sesi presensi berhasil dihapus", "info");
+      toast("Sesi presensi berhasil dihapus permanen", "info");
       await loadAll();
     } catch (e) {
       toast(
         isApiError(e)
           ? e.message
-          : "Sesi tidak dapat dihapus karena sudah memiliki catatan presensi (K-05).",
+          : "Gagal menghapus sesi presensi.",
         "error",
       );
     } finally {
@@ -152,8 +192,9 @@ export default function Schedules() {
         <Item className="soft-inset flex items-start gap-2.5 rounded-2xl p-3.5 text-xs text-muted">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
           <span>
-            <strong>J-06 & K-05:</strong> Sesi bertumpuk ditolak. Sesi yang sudah memiliki catatan presensi tidak dapat dihapus permanen
-            (diarsipkan agar riwayat tetap terjaga).
+            <strong>Aturan Sesi Harian:</strong> Maksimal <strong>{maxDailySessions} sesi per hari</strong>. Jam yang sudah terlewat
+            tetap dapat dibuat khusus untuk hari ini (otomatis <strong>Ditutup</strong> — khusus presensi manual penjaga).
+            Hapus permanen sesi sebelumnya dengan tombol Hapus jika kuota sesi harian sudah penuh.
           </span>
         </Item>
 
@@ -205,10 +246,17 @@ export default function Schedules() {
                     </IconButton>
                     <IconButton
                       label={`Arsipkan ${s.name}`}
-                      className="size-9 text-danger"
+                      className="size-9 text-amber-500"
                       onClick={() => void handleArchiveSchedule(s)}
                     >
                       <Archive className="size-4" aria-hidden />
+                    </IconButton>
+                    <IconButton
+                      label={`Hapus ${s.name}`}
+                      className="size-9 text-danger"
+                      onClick={() => void handleDeleteSchedule(s)}
+                    >
+                      <Trash2 className="size-4" aria-hidden />
                     </IconButton>
                   </div>
                 </div>
@@ -219,24 +267,28 @@ export default function Schedules() {
                       ? `Hari: ${repeatUiDays.join(", ") || "-"}`
                       : `Tanggal khusus: ${fmtDate(toWitaDate(s.startsAt))}`}
                   </span>
-                  {s.validFrom && s.validTo && (
+                  {s.scheduleKind === "RECURRING" && s.validFrom && s.validTo ? (
                     <span>
                       Periode: {fmtDate(s.validFrom, { day: "numeric", month: "short" })} –{" "}
                       {fmtDate(s.validTo, { day: "numeric", month: "short", year: "numeric" })}
                     </span>
+                  ) : (
+                    <span>Berlaku 1 hari</span>
                   )}
                 </div>
 
-                <div className="mt-2.5 flex items-center justify-between gap-2 pt-1">
-                  <button
-                    type="button"
-                    disabled={busyId === s.id}
-                    onClick={() => void handleMaterializeToday(s)}
-                    className="soft-inset rounded-full px-3 py-1.5 text-[11px] font-semibold text-primary hover:bg-primary-soft"
-                  >
-                    + Bentuk sesi 7 hari ke depan
-                  </button>
-                </div>
+                {(s.scheduleKind === "RECURRING" || schedSessions.length === 0) && (
+                  <div className="mt-2.5 flex items-center justify-between gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={busyId === s.id}
+                      onClick={() => void handleMaterializeSchedule(s)}
+                      className="soft-inset rounded-full px-3 py-1.5 text-[11px] font-semibold text-primary hover:bg-primary-soft"
+                    >
+                      {s.scheduleKind === "RECURRING" ? "+ Bentuk sesi 7 hari ke depan" : "+ Bentuk sesi hari ini"}
+                    </button>
+                  </div>
+                )}
               </Card>
             );
           })
@@ -245,16 +297,18 @@ export default function Schedules() {
         {sessions.length > 0 && (
           <>
             <SectionTitle>Sesi presensi terbentuk ({sessions.length})</SectionTitle>
-            {sessions.slice(0, 10).map((sess) => {
-              const isOpen = sess.status === "OPEN";
+            {(showAllSessions ? sessions : sessions.slice(0, 10)).map((sess) => {
+              const isExpired = Date.parse(sess.endsAt) <= Date.now();
+              const effectiveStatus = sess.status === "OPEN" && isExpired ? "CLOSED" : sess.status;
+              const isOpen = effectiveStatus === "OPEN";
               return (
                 <Card key={sess.id} className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold">{sess.scheduleName}</p>
-                        <Badge tone={isOpen ? "success" : sess.status === "CLOSED" ? "neutral" : "danger"}>
-                          {sess.status}
+                        <Badge tone={isOpen ? "success" : effectiveStatus === "CLOSED" ? "neutral" : "danger"}>
+                          {effectiveStatus === "OPEN" ? "Terbuka" : effectiveStatus === "CLOSED" ? "Ditutup" : "Dibatalkan"}
                         </Badge>
                       </div>
                       <p className="mt-0.5 font-display text-xs text-muted">
@@ -274,7 +328,7 @@ export default function Schedules() {
                         </button>
                       )}
                       <IconButton
-                        label={`Hapus sesi ${sess.scheduleName}`}
+                        label={`Hapus permanen sesi ${sess.scheduleName}`}
                         className="size-8 text-danger"
                         onClick={() => void handleDeleteSession(sess)}
                       >
@@ -285,6 +339,17 @@ export default function Schedules() {
                 </Card>
               );
             })}
+            {sessions.length > 10 && (
+              <Button
+                type="button"
+                variant="glass"
+                size="sm"
+                block
+                onClick={() => setShowAllSessions((v) => !v)}
+              >
+                {showAllSessions ? "Tampilkan 10 sesi terbaru" : `Lihat semua sesi (${sessions.length})`}
+              </Button>
+            )}
           </>
         )}
 
@@ -298,17 +363,33 @@ export default function Schedules() {
           <>
             <SectionTitle>Jadwal diarsipkan (riwayat dipertahankan · K-05)</SectionTitle>
             {archivedSchedules.map((s) => (
-              <Card key={s.id} className="p-4 opacity-75">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold">{s.name}</p>
+              <Card key={s.id} className="p-4 opacity-85">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{s.name}</p>
                     <p className="font-display text-xs text-muted">
                       {s.scheduleKind === "RECURRING"
                         ? `${toWitaTime(s.startTime)}–${toWitaTime(s.endTime)} WITA`
                         : `${toWitaTime(s.startsAt)}–${toWitaTime(s.endsAt)} WITA`}
                     </p>
                   </div>
-                  <Badge tone="neutral">{s.status === "INACTIVE" ? "Diarsipkan" : "Dibatalkan"}</Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Badge tone="neutral">{s.status === "INACTIVE" ? "Diarsipkan" : "Dibatalkan"}</Badge>
+                    <IconButton
+                      label={`Pulihkan ${s.name}`}
+                      className="size-8 text-primary"
+                      onClick={() => void handleRestoreSchedule(s)}
+                    >
+                      <RotateCcw className="size-3.5" aria-hidden />
+                    </IconButton>
+                    <IconButton
+                      label={`Hapus ${s.name}`}
+                      className="size-8 text-danger"
+                      onClick={() => void handleDeleteSchedule(s)}
+                    >
+                      <Trash2 className="size-3.5" aria-hidden />
+                    </IconButton>
+                  </div>
                 </div>
               </Card>
             ))}

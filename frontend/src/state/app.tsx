@@ -7,7 +7,6 @@ import {
   isApiError,
   residentsApi,
   setAuthExpiredHandler,
-  type RegisterResidentRequest,
   type ResidentProfileDto,
   type UserRole,
   type UserSessionDto,
@@ -26,6 +25,7 @@ export interface User {
   residentId?: string;
   room?: string;
   building?: string;
+  hallName?: string | null;
 }
 
 export function mapBackendRole(role: UserRole): Role {
@@ -35,7 +35,6 @@ export function mapBackendRole(role: UserRole): Role {
     case "ADMIN":
       return "admin";
     case "MONITOR":
-    case "VILLAGE_DEAN":
     default:
       return "penjaga";
   }
@@ -72,6 +71,7 @@ function buildUserFromSession(
     residentId: session.residentId ?? residentProfile?.id,
     room: residentProfile?.roomNumber ?? undefined,
     building: residentProfile?.building ?? undefined,
+    hallName: session.hallName ?? residentProfile?.hallName ?? null,
   };
 }
 
@@ -79,18 +79,13 @@ export type LoginResult =
   | { ok: true; role: Role; user: User }
   | { ok: false; error: string; code?: string; lockedUntil?: number };
 
-export type RegisterResult =
-  | { ok: true; user: User }
-  | { ok: false; error: string; fieldErrors?: Record<string, string> };
-
 interface AuthCtx {
   user: User | null;
   initializing: boolean;
   login: (identifier: string, password: string) => Promise<LoginResult>;
-  registerResident: (payload: RegisterResidentRequest) => Promise<RegisterResult>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
-  changePassword: (currentPassword: string, newPassword: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  changePassword: (currentPassword: string, newPassword: string, confirmPassword?: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 }
 
 const Ctx = createContext<AuthCtx>(null!);
@@ -221,36 +216,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [hydrateFromSession],
   );
 
-  const registerResident = useCallback(
-    async (payload: RegisterResidentRequest): Promise<RegisterResult> => {
-      try {
-        await authApi.register(payload);
-        const tokenResp = await authApi.login({
-          identifier: payload.nim.trim(),
-          password: payload.password,
-        });
-        const built = await hydrateFromSession(tokenResp.user);
-        return { ok: true, user: built };
-      } catch (err) {
-        if (isApiError(err)) {
-          const fieldErrors: Record<string, string> = {};
-          if (err.details) {
-            for (const [k, v] of Object.entries(err.details)) {
-              if (typeof v === "string") fieldErrors[k] = v;
-            }
-          }
-          return {
-            ok: false,
-            error: err.message,
-            fieldErrors: Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined,
-          };
-        }
-        return { ok: false, error: "Terjadi kesalahan saat mendaftarkan akun penghuni." };
-      }
-    },
-    [hydrateFromSession],
-  );
-
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
@@ -263,9 +228,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     async (
       currentPassword: string,
       newPassword: string,
+      confirmPassword?: string,
     ): Promise<{ ok: true } | { ok: false; error: string }> => {
       try {
-        await authApi.changePassword({ currentPassword, newPassword });
+        await authApi.changePassword({
+          old_password: currentPassword,
+          new_password: newPassword,
+          confirm_password: confirmPassword ?? newPassword,
+          currentPassword,
+          newPassword,
+        });
         return { ok: true };
       } catch (err) {
         if (isApiError(err)) {
@@ -283,7 +255,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         user,
         initializing,
         login,
-        registerResident,
         logout,
         refreshProfile,
         changePassword,

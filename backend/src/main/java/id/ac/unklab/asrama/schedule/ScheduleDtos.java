@@ -1,9 +1,12 @@
 package id.ac.unklab.asrama.schedule;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import id.ac.unklab.asrama.common.DomainEnums.ResidenceCategory;
 import id.ac.unklab.asrama.common.DomainEnums.ScheduleKind;
 import id.ac.unklab.asrama.common.DomainEnums.ScheduleStatus;
 import id.ac.unklab.asrama.common.DomainEnums.SessionStatus;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -43,8 +46,25 @@ public final class ScheduleDtos {
             LocalTime endTime,
             LocalDate validFrom,
             LocalDate validTo,
-            String description
-    ) {}
+            String description,
+            String hallName
+    ) {
+        public CreateScheduleRequest(
+                String name,
+                UUID activityTypeId,
+                ScheduleKind scheduleKind,
+                OffsetDateTime startsAt,
+                OffsetDateTime endsAt,
+                List<Short> repeatDays,
+                LocalTime startTime,
+                LocalTime endTime,
+                LocalDate validFrom,
+                LocalDate validTo,
+                String description
+        ) {
+            this(name, activityTypeId, scheduleKind, startsAt, endsAt, repeatDays, startTime, endTime, validFrom, validTo, description, null);
+        }
+    }
 
     public record UpdateScheduleRequest(
             @NotBlank(message = "Nama jadwal kegiatan wajib diisi")
@@ -59,8 +79,26 @@ public final class ScheduleDtos {
             LocalDate validFrom,
             LocalDate validTo,
             ScheduleStatus status,
-            String description
-    ) {}
+            String description,
+            String hallName
+    ) {
+        public UpdateScheduleRequest(
+                String name,
+                UUID activityTypeId,
+                ScheduleKind scheduleKind,
+                OffsetDateTime startsAt,
+                OffsetDateTime endsAt,
+                List<Short> repeatDays,
+                LocalTime startTime,
+                LocalTime endTime,
+                LocalDate validFrom,
+                LocalDate validTo,
+                ScheduleStatus status,
+                String description
+        ) {
+            this(name, activityTypeId, scheduleKind, startsAt, endsAt, repeatDays, startTime, endTime, validFrom, validTo, status, description, null);
+        }
+    }
 
     public record ScheduleDto(
             UUID id,
@@ -80,8 +118,33 @@ public final class ScheduleDtos {
             String description,
             UUID createdBy,
             OffsetDateTime createdAt,
-            OffsetDateTime updatedAt
-    ) {}
+            OffsetDateTime updatedAt,
+            String hallName
+    ) {
+        public ScheduleDto(
+                UUID id,
+                String name,
+                UUID activityTypeId,
+                String activityTypeCode,
+                String activityTypeName,
+                ScheduleKind scheduleKind,
+                OffsetDateTime startsAt,
+                OffsetDateTime endsAt,
+                List<Short> repeatDays,
+                LocalTime startTime,
+                LocalTime endTime,
+                LocalDate validFrom,
+                LocalDate validTo,
+                ScheduleStatus status,
+                String description,
+                UUID createdBy,
+                OffsetDateTime createdAt,
+                OffsetDateTime updatedAt
+        ) {
+            this(id, name, activityTypeId, activityTypeCode, activityTypeName, scheduleKind, startsAt, endsAt,
+                    repeatDays, startTime, endTime, validFrom, validTo, status, description, createdBy, createdAt, updatedAt, null);
+        }
+    }
 
     public record CreateSessionRequest(
             @NotNull(message = "scheduleId wajib diisi")
@@ -91,7 +154,22 @@ public final class ScheduleDtos {
             OffsetDateTime startsAt,
 
             @NotNull(message = "Waktu selesai sesi (endsAt) wajib diisi")
-            OffsetDateTime endsAt
+            OffsetDateTime endsAt,
+
+            String hallName
+    ) {
+        public CreateSessionRequest(UUID scheduleId, OffsetDateTime startsAt, OffsetDateTime endsAt) {
+            this(scheduleId, startsAt, endsAt, null);
+        }
+    }
+
+    public record UpdateSessionRequest(
+            String name,
+            OffsetDateTime startsAt,
+            OffsetDateTime endsAt,
+            SessionStatus status,
+            String hallName,
+            GeofenceConfigRequest geofence
     ) {}
 
     public record MaterializeSessionsRequest(
@@ -141,8 +219,25 @@ public final class ScheduleDtos {
             OffsetDateTime closedAt,
             GeofenceDto geofence,
             OffsetDateTime createdAt,
-            OffsetDateTime updatedAt
+            OffsetDateTime updatedAt,
+            String hallName
     ) {
+        public SessionDto(
+                UUID id,
+                UUID scheduleId,
+                String scheduleName,
+                String activityTypeCode,
+                OffsetDateTime startsAt,
+                OffsetDateTime endsAt,
+                SessionStatus status,
+                UUID createdBy,
+                OffsetDateTime closedAt,
+                GeofenceDto geofence,
+                OffsetDateTime createdAt,
+                OffsetDateTime updatedAt
+        ) {
+            this(id, scheduleId, scheduleName, activityTypeCode, startsAt, endsAt, status, createdBy, closedAt, geofence, createdAt, updatedAt, null);
+        }
         public boolean isGeoEnabled() {
             return geofence != null && geofence.isEnabled();
         }
@@ -202,4 +297,18 @@ public final class ScheduleDtos {
             String description,
             OffsetDateTime createdAt
     ) {}
+
+    public record ScheduleSettingsDto(
+            int maxDailySessions
+    ) {}
+
+    public record UpdateScheduleSettingsRequest(
+            @NotNull(message = "Batas maksimal sesi per hari wajib diisi")
+            @Min(value = 1, message = "Minimal 1 sesi per hari")
+            @Max(value = 3, message = "Maksimal 3 sesi per hari")
+            Integer maxDailySessions
+    ) {
+        @JsonCreator
+        public UpdateScheduleSettingsRequest {}
+    }
 }

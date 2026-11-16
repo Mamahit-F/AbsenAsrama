@@ -55,8 +55,9 @@ const MenuItem = ({ icon, label, onSelect, index, totalItems, isOpen }: MenuItem
         damping: 26,
       }}
       style={{ height: CONSTANTS.itemSize, width: CONSTANTS.itemSize }}
+      data-wave-sync=""
       className={cn(
-        "soft-sm absolute flex items-center justify-center rounded-full text-primary",
+        "micro-glass absolute flex items-center justify-center rounded-full ink-teal",
         !isOpen && "pointer-events-none",
       )}
     >
@@ -95,7 +96,7 @@ const MenuTrigger = ({ setIsOpen, isOpen, itemsLength, closeAnimationCallback, o
       await animate.start({
         height: size,
         width: size,
-        backgroundColor: `color-mix(in srgb, #211e55 ${Math.max(100 - i * 12, 40)}%, #c026d3)`,
+        backgroundColor: `color-mix(in srgb, #211e55 ${Math.max(100 - i * 12, 40)}%, #0E8F7E)`,
         transition: { duration: CONSTANTS.closeStagger / 2, ease: "linear" },
       });
       if (i !== scaleTransition.length - 1) await new Promise((resolve) => setTimeout(resolve, CONSTANTS.closeStagger * 1000));

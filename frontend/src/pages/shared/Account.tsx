@@ -24,10 +24,7 @@ export default function Account() {
   const backTo =
     user.role === "admin" ? "/admin" : user.role === "penjaga" ? "/penjaga" : "/penghuni";
 
-  const roleBadgeLabel =
-    user.backendRole === "VILLAGE_DEAN"
-      ? "DEKAN ASRAMA (VILLAGE DEAN)"
-      : user.role.toUpperCase();
+  const roleBadgeLabel = user.role.toUpperCase();
 
   const handleLogout = async () => {
     if (loggingOut) return;

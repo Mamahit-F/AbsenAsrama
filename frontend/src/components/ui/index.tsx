@@ -11,20 +11,20 @@ export const spring = { type: "spring", bounce: 0.22, visualDuration: 0.4 } as c
 export const springSnappy = { type: "spring", bounce: 0.18, visualDuration: 0.24 } as const;
 export const easeOut = [0.16, 1, 0.3, 1] as const;
 
-/* Elements entering the viewport in the same frame cascade instead of popping together. */
+/* Stagger reveals slightly based on viewport entrance, resetting after quiet frames. */
 let lastReveal = 0;
 let revealIdx = 0;
 function nextRevealDelay() {
   const now = typeof performance !== "undefined" ? performance.now() : 0;
   if (now - lastReveal > 90) revealIdx = 0;
   lastReveal = now;
-  return Math.min(revealIdx++, 9) * 0.06;
+  return Math.min(revealIdx++, 7) * 0.038;
 }
 export const reveal: Variants = {
-  hidden: { opacity: 0, y: 22, scale: 0.97 },
-  show: () => ({ opacity: 1, y: 0, scale: 1, transition: { ...spring, delay: nextRevealDelay() } }),
+  hidden: { opacity: 0, y: 12 },
+  show: () => ({ opacity: 1, y: 0, transition: { ...spring, delay: nextRevealDelay() } }),
 };
-export const inViewProps = { initial: "hidden", whileInView: "show", viewport: { once: true, margin: "0px 0px -6% 0px" } } as const;
+export const inViewProps = { initial: "hidden", animate: "show" } as const;
 export const list = { hidden: {}, show: {} };
 export const item = reveal;
 
@@ -34,8 +34,13 @@ export function GradientDefs() {
     <svg width="0" height="0" className="absolute" aria-hidden focusable="false">
       <defs>
         <linearGradient id="g-violet" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#d946ef" />
-          <stop offset="1" stopColor="#5b21b6" />
+          <stop offset="0" stopColor="#3CC4AE" />
+          <stop offset="1" stopColor="#0A5C51" />
+        </linearGradient>
+        <linearGradient id="g-teal" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#D5F0EA" />
+          <stop offset="0.5" stopColor="#3CC4AE" />
+          <stop offset="1" stopColor="#0E8F7E" />
         </linearGradient>
         <linearGradient id="g-amber" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#fbbf24" />
@@ -57,13 +62,19 @@ export function GradientDefs() {
     </svg>
   );
 }
-export type Paint = "violet" | "amber" | "sky" | "rose" | "mint";
+export type Paint = "violet" | "teal" | "amber" | "sky" | "rose" | "mint";
 
 /** Raised squircle with a gradient-stroked icon — the "3D icon" tiles from the references. */
-export function IconTile({ icon: I, paint = "violet", size = 56, className, night }: { icon: LucideIcon; paint?: Paint; size?: number; className?: string; night?: boolean }) {
+export function IconTile({ icon: I, paint = "violet", size = 56, className, night, flat }: { icon: LucideIcon; paint?: Paint; size?: number; className?: string; night?: boolean; flat?: boolean }) {
   return (
     <span
-      className={cn("grid shrink-0 place-items-center", night ? "night-card" : "soft-sm", className)}
+      data-wave-sync={flat ? undefined : ""}
+      className={cn(
+        flat ? "bg-primary/10 dark:bg-white/[0.08]" : "micro-glass",
+        "grid shrink-0 place-items-center",
+        night && !flat && "icon-well",
+        className,
+      )}
       style={{ width: size, height: size, borderRadius: size * 0.36 }}
       aria-hidden
     >
@@ -84,7 +95,7 @@ interface BtnProps extends Omit<HTMLMotionProps<"button">, "children"> {
 }
 const variants: Record<BtnVariant, string> = {
   primary: "grad-accent",
-  glass: "soft-sm text-foreground",
+  glass: "micro-glass ink-2",
   light: "bg-white text-night shadow-[0_12px_26px_-14px_rgba(0,0,0,.6)]",
   ghost: "text-primary hover:bg-primary-soft",
   danger: "bg-gradient-to-r from-[#e0446a] to-[#9f1239] text-white shadow-[0_12px_24px_-12px_rgba(190,24,93,.7)]",
@@ -99,6 +110,7 @@ export const Button = forwardRef<HTMLButtonElement, BtnProps>(function Button(
   return (
     <motion.button
       ref={ref}
+      data-wave-sync=""
       whileTap={off ? undefined : { scale: 0.96 }}
       whileHover={off ? undefined : { y: -1 }}
       transition={springSnappy}
@@ -130,16 +142,18 @@ export const Button = forwardRef<HTMLButtonElement, BtnProps>(function Button(
   );
 });
 
-export function IconButton({ label, children, className, tone = "glass", ...rest }: HTMLMotionProps<"button"> & { label: string; tone?: "glass" | "navy" | "plain" | "solid" }) {
+export function IconButton({ label, children, className, tone = "glass", type = "button", ...rest }: HTMLMotionProps<"button"> & { label: string; tone?: "glass" | "navy" | "plain" | "solid" }) {
   return (
     <motion.button
+      type={type}
       aria-label={label}
+      data-wave-sync={tone === "glass" || tone === "navy" ? "" : undefined}
       whileTap={{ scale: 0.88 }}
       transition={springSnappy}
       className={cn(
         "grid size-11 shrink-0 place-items-center rounded-full transition-[filter] duration-200",
-        tone === "glass" && "soft-sm text-foreground",
-        tone === "navy" && "night-card text-white",
+        tone === "glass" && "micro-glass ink-2",
+        tone === "navy" && "micro-glass ink-2",
         tone === "plain" && "text-primary hover:bg-primary-soft",
         tone === "solid" && "grad-accent",
         className,
@@ -152,19 +166,47 @@ export function IconButton({ label, children, className, tone = "glass", ...rest
 }
 
 /* ---------- Surfaces ---------- */
-export function Card({ className, children, navy, ...rest }: HTMLMotionProps<"div"> & { navy?: boolean }) {
+type GlassSurfaceKind = "slab" | "card" | "pill" | "capsule";
+
+export function Card({
+  className,
+  children,
+  navy,
+  glass,
+  radius = 28,
+  ...rest
+}: HTMLMotionProps<"div"> & { navy?: boolean; glass?: GlassSurfaceKind | false; radius?: number }) {
+  const glassKind = glass === undefined ? (navy ? undefined : "card") : glass || undefined;
   return (
-    <motion.div variants={reveal} {...inViewProps} className={cn(navy ? "glass-navy" : "soft", "rounded-[var(--radius-card)] p-5", className)} {...rest}>
+    <motion.div
+      variants={reveal}
+      {...inViewProps}
+      data-glass={glassKind}
+      data-radius={glassKind ? radius : undefined}
+      className={cn(navy ? "glass-navy" : "soft", "rounded-[var(--radius-card)] p-5", className)}
+      {...rest}
+    >
       {children}
     </motion.div>
   );
 }
 
-export function PressCard({ className, children, ...rest }: HTMLMotionProps<"button">) {
+export function PressCard({
+  className,
+  children,
+  glass = "card",
+  radius = 28,
+  ...rest
+}: HTMLMotionProps<"button"> & { glass?: GlassSurfaceKind | false; radius?: number }) {
+  const glassKind = glass || undefined;
   return (
     <motion.button
       variants={reveal}
       {...inViewProps}
+      data-glass={glassKind}
+      data-radius={glassKind ? radius : undefined}
+      data-glass-interactive={glassKind ? "" : undefined}
+      whileHover={{ y: -2, scale: 1.008 }}
       whileTap={{ scale: 0.97 }}
       transition={springSnappy}
       className={cn("soft w-full rounded-[var(--radius-card)] p-5 text-left transition-shadow duration-200 active:shadow-[var(--sh-inset)]", className)}
@@ -220,12 +262,12 @@ const tones: Record<Tone, string> = {
   danger: "bg-danger-soft text-danger",
   warning: "bg-warning-soft text-warning",
   info: "bg-primary-soft text-primary",
-  neutral: "soft-inset text-muted",
-  navy: "bg-white/12 text-white",
+  neutral: "micro-glass ink-3",
+  navy: "micro-glass ink-2",
 };
 export function Badge({ tone = "neutral", children, dot, className }: { tone?: Tone; children: ReactNode; dot?: boolean; className?: string }) {
   return (
-    <span className={cn("inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold", tones[tone], className)}>
+    <span data-wave-sync="" className={cn("inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[12px] font-semibold", tones[tone], className)}>
       {dot && <span className="size-1.5 rounded-full bg-current" aria-hidden />}
       {children}
     </span>
@@ -237,8 +279,8 @@ export function methodTone(m: string): Tone {
 
 /* ---------- Avatar ---------- */
 const AVATAR_GRAD = [
-  "linear-gradient(135deg,#a78bfa,#6d28d9)",
-  "linear-gradient(135deg,#f0abfc,#a21caf)",
+  "linear-gradient(135deg,#3CC4AE,#0E8F7E 55%,#0A5C51)",
+  "linear-gradient(135deg,#7c83f7,#2a2766)",
   "linear-gradient(135deg,#93c5fd,#4338ca)",
   "linear-gradient(135deg,#fda4af,#be185d)",
 ];
@@ -256,7 +298,7 @@ export function Avatar({ name, size = 44, className }: { name: string; size?: nu
 }
 
 /* ---------- Form fields (inset wells) ---------- */
-const well = "soft-inset flex h-14 items-center gap-3 rounded-2xl px-4 transition-shadow duration-200 focus-within:shadow-[var(--sh-inset),0_0_0_2px_#a78bfa]";
+const well = "soft-inset flex h-14 items-center gap-3 rounded-2xl px-4 transition-shadow duration-200 focus-within:shadow-[var(--sh-inset),0_0_0_2px_#0E8F7E]";
 const wellErr = "shadow-[var(--sh-inset),0_0_0_2px_#e0446a]";
 
 interface FieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -270,7 +312,7 @@ export function Field({ label, error, hint, icon, trailing, className, id, ...re
   const auto = useId();
   const fid = id ?? auto;
   return (
-    <div className={className}>
+    <div data-wave-sync="" className={className}>
       <label htmlFor={fid} className="mb-2 ml-1 block text-[13px] font-semibold text-muted">
         {label}
       </label>
@@ -314,7 +356,7 @@ export function TextArea({ label, error, hint, className, id, ...rest }: React.T
   const auto = useId();
   const fid = id ?? auto;
   return (
-    <div className={className}>
+    <div data-wave-sync="" className={className}>
       <label htmlFor={fid} className="mb-2 ml-1 block text-[13px] font-semibold text-muted">
         {label}
       </label>
@@ -337,7 +379,7 @@ export function SelectField({ label, children, className, id, ...rest }: React.S
   const auto = useId();
   const fid = id ?? auto;
   return (
-    <div className={className}>
+    <div data-wave-sync="" className={className}>
       <label htmlFor={fid} className="mb-2 ml-1 block text-[13px] font-semibold text-muted">
         {label}
       </label>
@@ -367,23 +409,25 @@ export function Segmented<T extends string>({
 }) {
   const id = useId();
   return (
-    <div role="tablist" className={cn("flex rounded-full p-1.5", dark ? "night-inset" : "soft-inset", className)}>
+    <div role="tablist" data-wave-sync="" className={cn("flex rounded-full p-1.5 soft-inset", className)}>
       {options.map((o) => {
         const on = o.value === value;
         return (
           <button
             key={o.value}
+            type="button"
+            data-wave-sync=""
             role="tab"
             aria-selected={on}
             onClick={() => onChange(o.value)}
             className={cn(
               "relative flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full px-3 font-display text-[14px] font-semibold transition-colors duration-200",
-              on ? (dark ? "text-night" : "text-primary") : dark ? "text-night-muted hover:text-white" : "text-muted hover:text-foreground",
+              on ? (dark ? "ink-teal" : "text-primary") : "ink-4 hover:text-foreground",
             )}
           >
-            {on && <motion.span layoutId={`seg-${id}`} transition={spring} className={cn("absolute inset-0 rounded-full", dark ? "bg-white" : "soft-sm")} />}
+            {on && <motion.span layoutId={`seg-${id}`} transition={spring} className="micro-glass absolute inset-0 rounded-full" />}
             <span className="relative">{o.label}</span>
-            {o.count !== undefined && <span className={cn("relative rounded-full px-1.5 text-[11px] tabular", on ? "bg-primary-soft" : "bg-black/5")}>{o.count}</span>}
+            {o.count !== undefined && <span className={cn("relative rounded-full px-1.5 text-[11px] tabular", on ? "bg-primary-soft" : "bg-black/5 dark:bg-white/10")}>{o.count}</span>}
           </button>
         );
       })}
@@ -395,11 +439,13 @@ export function Segmented<T extends string>({
 export function Chip({ on, children, onClick, className }: { on?: boolean; children: ReactNode; onClick?: () => void; className?: string }) {
   return (
     <motion.button
+      type="button"
+      data-wave-sync=""
       whileTap={{ scale: 0.92 }}
       transition={springSnappy}
       onClick={onClick}
       aria-pressed={on}
-      className={cn("h-10 shrink-0 rounded-full px-4 font-display text-[13px] font-semibold transition-colors duration-200", on ? "grad-accent" : "soft-sm text-muted hover:text-foreground", className)}
+      className={cn("h-10 shrink-0 rounded-full px-4 font-display text-[13px] font-semibold transition-colors duration-200", on ? "grad-accent" : "micro-glass ink-3 hover:text-foreground", className)}
     >
       {children}
     </motion.button>
@@ -410,6 +456,8 @@ export function Chip({ on, children, onClick, className }: { on?: boolean; child
 export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
     <button
+      type="button"
+      data-wave-sync=""
       role="switch"
       aria-checked={checked}
       aria-label={label}
@@ -446,7 +494,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={(_, i) => (i.offset.y > 120 || i.velocity.y > 600) && onClose()}
-            className="relative max-h-[88dvh] w-full max-w-[430px] overflow-y-auto rounded-t-[34px] bg-surface px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3"
+            className="lg-sheet-optical relative max-h-[88dvh] w-full max-w-[430px] overflow-y-auto rounded-t-[34px] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-3 sm:mb-5 sm:max-w-[500px] sm:rounded-[34px]"
           >
             <div className="mx-auto mb-3 h-1.5 w-11 rounded-full soft-inset" aria-hidden />
             <div className="mb-5 flex items-center justify-between">
@@ -467,10 +515,10 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <motion.div {...inViewProps} variants={{ hidden: {}, show: {} }} className="mb-4 mt-9 flex items-center justify-between gap-3">
-      <motion.h2 variants={reveal} className="flex items-center gap-2.5 text-[19px] font-semibold">
+      <motion.h2 data-wave-sync="" variants={reveal} className="flex items-center gap-2.5 text-[19px] font-semibold">
         <motion.span
           aria-hidden
-          variants={{ hidden: { scaleY: 0 }, show: { scaleY: 1, transition: { ...spring, delay: 0.05 } } }}
+          variants={{ hidden: { scaleY: 0 }, show: { scaleY: 1, transition: { ...spring, delay: 0.04 } } }}
           className="h-5 w-1.5 origin-bottom rounded-full"
           style={{ background: "var(--grad-accent)" }}
         />
@@ -484,7 +532,7 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
 export function Empty({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
   return (
     <Item className="soft-inset flex flex-col items-center rounded-[var(--radius-card)] px-6 py-10 text-center">
-      <div className="soft-sm mb-4 grid size-14 place-items-center rounded-[20px] text-primary">{icon}</div>
+      <div className="mb-4 grid size-14 place-items-center rounded-[20px] bg-primary/10 text-primary">{icon}</div>
       <p className="font-display text-lg font-semibold">{title}</p>
       <p className="mt-1 text-sm text-muted">{text}</p>
     </Item>
@@ -503,7 +551,7 @@ export function Countdown({ until, className }: { until: number; className?: str
 
 export function Checkbox({ checked, onChange, children }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3">
+    <label data-wave-sync="" className="flex cursor-pointer items-start gap-3">
       <input type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span
         className={cn(
@@ -524,21 +572,19 @@ export function Checkbox({ checked, onChange, children }: { checked: boolean; on
 export function Meter({ value, className, night }: { value: number; className?: string; night?: boolean }) {
   const v = Math.max(0, Math.min(1, value));
   return (
-    <div className={cn("relative h-3 rounded-full", night ? "night-inset" : "soft-inset", className)}>
+    <div data-wave-sync="" className={cn("relative h-3 rounded-full soft-inset", night && "opacity-95", className)}>
       <motion.div
         className="absolute inset-y-0 left-0 rounded-full"
         style={{ background: "var(--grad-accent)" }}
         initial={{ width: "0%" }}
-        whileInView={{ width: `${v * 100}%` }}
-        viewport={{ once: true }}
-        transition={{ duration: 1.1, ease: easeOut, delay: 0.15 }}
+        animate={{ width: `${v * 100}%` }}
+        transition={{ duration: 0.7, ease: easeOut, delay: 0.05 }}
       />
       <motion.span
-        className="absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-[#7c83f7] shadow-[0_3px_8px_rgba(60,40,140,.45)]"
+        className="absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-[#3CC4AE] shadow-[0_3px_10px_rgba(10,92,81,.52)]"
         initial={{ left: "0%" }}
-        whileInView={{ left: `${v * 100}%` }}
-        viewport={{ once: true }}
-        transition={{ duration: 1.1, ease: easeOut, delay: 0.15 }}
+        animate={{ left: `${v * 100}%` }}
+        transition={{ duration: 0.7, ease: easeOut, delay: 0.05 }}
         aria-hidden
       />
     </div>

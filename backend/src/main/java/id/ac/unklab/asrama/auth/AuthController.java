@@ -29,7 +29,7 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Login semua role (PENGHUNI, MONITOR, ADMIN, VILLAGE_DEAN) dengan proteksi lockout 5x gagal (A-01, A-04)")
+    @Operation(summary = "Login semua role (PENGHUNI, MONITOR, ADMIN) dengan proteksi lockout 5x gagal (A-01, A-04)")
     public ResponseEntity<ApiResponse<AuthTokenResponse>> login(@Valid @RequestBody LoginRequest request) {
         AuthTokenResponse tokens = authService.login(request);
         return ResponseEntity.ok(ApiResponse.ok("Login berhasil", tokens));

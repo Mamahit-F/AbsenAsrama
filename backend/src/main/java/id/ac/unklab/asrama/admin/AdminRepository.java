@@ -21,6 +21,10 @@ public class AdminRepository {
 
     private static final RowMapper<UserAccountDto> USER_ACCOUNT_MAPPER = (rs, rowNum) -> {
         String resId = rs.getString("resident_id");
+        String hall = null;
+        try {
+            hall = rs.getString("hall_name");
+        } catch (Exception ignored) {}
         return new UserAccountDto(
                 UUID.fromString(rs.getString("id")),
                 resId != null ? UUID.fromString(resId) : null,
@@ -28,20 +32,22 @@ public class AdminRepository {
                 rs.getString("resident_name"),
                 rs.getString("username"),
                 rs.getString("email"),
-                UserRole.valueOf(rs.getString("role")),
+                UserRole.fromDatabase(rs.getString("role")),
                 rs.getBoolean("is_active"),
                 rs.getInt("failed_login_attempts"),
                 rs.getObject("locked_until", OffsetDateTime.class),
                 rs.getObject("last_login_at", OffsetDateTime.class),
                 rs.getObject("created_at", OffsetDateTime.class),
-                rs.getObject("updated_at", OffsetDateTime.class)
+                rs.getObject("updated_at", OffsetDateTime.class),
+                hall
         );
     };
 
     private static final String BASE_USER_SELECT = """
             SELECT u.id, u.resident_id, r.nim AS resident_nim, r.full_name AS resident_name,
                    u.username, u.email, u.role, u.is_active, u.failed_login_attempts,
-                   u.locked_until, u.last_login_at, u.created_at, u.updated_at
+                   u.locked_until, u.last_login_at, u.created_at, u.updated_at,
+                   COALESCE(u.hall_name, r.hall_name) AS hall_name
             FROM public.users u
             LEFT JOIN public.residents r ON r.id = u.resident_id
             """;
@@ -58,11 +64,23 @@ public class AdminRepository {
             String building,
             String roomNumber
     ) {
+        return insertResident(nim, fullName, status, category, building, roomNumber, null);
+    }
+
+    public UUID insertResident(
+            String nim,
+            String fullName,
+            ResidentStatus status,
+            ResidenceCategory category,
+            String building,
+            String roomNumber,
+            String hallName
+    ) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
                 """
-                INSERT INTO public.residents(id, nim, full_name, status, residence_category, building, room_number)
-                VALUES (?::uuid, ?, ?, ?::public.resident_status, ?::public.residence_category, ?, ?)
+                INSERT INTO public.residents(id, nim, full_name, status, residence_category, building, room_number, hall_name)
+                VALUES (?::uuid, ?, ?, ?::public.resident_status, ?::public.residence_category, ?, ?, ?)
                 """,
                 id.toString(),
                 nim.trim(),
@@ -70,7 +88,8 @@ public class AdminRepository {
                 status != null ? status.name() : ResidentStatus.AKTIF.name(),
                 category != null ? category.name() : ResidenceCategory.ASRAMA.name(),
                 building,
-                roomNumber
+                roomNumber,
+                hallName
         );
         return id;
     }
@@ -84,6 +103,19 @@ public class AdminRepository {
             String building,
             String roomNumber
     ) {
+        updateResident(residentId, nim, fullName, status, category, building, roomNumber, null);
+    }
+
+    public void updateResident(
+            UUID residentId,
+            String nim,
+            String fullName,
+            ResidentStatus status,
+            ResidenceCategory category,
+            String building,
+            String roomNumber,
+            String hallName
+    ) {
         jdbcTemplate.update(
                 """
                 UPDATE public.residents
@@ -93,6 +125,7 @@ public class AdminRepository {
                     residence_category = ?::public.residence_category,
                     building = ?,
                     room_number = ?,
+                    hall_name = ?,
                     updated_at = now()
                 WHERE id = ?::uuid
                 """,
@@ -102,6 +135,7 @@ public class AdminRepository {
                 category.name(),
                 building,
                 roomNumber,
+                hallName,
                 residentId.toString()
         );
     }
@@ -159,19 +193,49 @@ public class AdminRepository {
     }
 
     public UUID insertStaffUser(String username, String email, String passwordHash, UserRole role) {
+        return insertStaffUser(username, email, passwordHash, role, null);
+    }
+
+    public UUID insertStaffUser(String username, String email, String passwordHash, UserRole role, String hallName) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update(
                 """
-                INSERT INTO public.users(id, resident_id, username, email, password_hash, role, is_active)
-                VALUES (?::uuid, NULL, ?, ?, ?, ?::public.user_role, true)
+                INSERT INTO public.users(id, resident_id, username, email, password_hash, role, is_active, hall_name)
+                VALUES (?::uuid, NULL, ?, ?, ?, ?::public.user_role, true, ?)
                 """,
                 id.toString(),
                 username.trim(),
                 email != null && !email.isBlank() ? email.trim() : null,
                 passwordHash,
-                role.name()
+                role.name(),
+                hallName
         );
         return id;
+    }
+
+    public UUID insertResidentUserAccount(UUID residentId, String nim, String passwordHash) {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                """
+                INSERT INTO public.users(id, resident_id, username, email, password_hash, role, is_active, hall_name)
+                VALUES (?::uuid, ?::uuid, ?, ?, ?, 'PENGHUNI'::public.user_role, true, NULL)
+                ON CONFLICT (username) DO NOTHING
+                """,
+                id.toString(),
+                residentId.toString(),
+                nim.trim(),
+                nim.trim() + "@unklab.ac.id",
+                passwordHash
+        );
+        return id;
+    }
+
+    public void updateUserHall(UUID userId, String hallName) {
+        jdbcTemplate.update(
+                "UPDATE public.users SET hall_name = ?, updated_at = now() WHERE id = ?::uuid",
+                hallName,
+                userId.toString()
+        );
     }
 
     public void updateUserActiveStatus(UUID userId, boolean isActive) {
@@ -210,12 +274,25 @@ public class AdminRepository {
         jdbcTemplate.update(
                 """
                 UPDATE public.users
-                SET role = ?::public.app_role,
+                SET role = ?::public.user_role,
                     updated_at = now()
                 WHERE id = ?::uuid
                 """,
                 role.name(),
                 userId.toString()
         );
+    }
+
+    public int countActiveAdmins() {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM public.users WHERE role = 'ADMIN'::public.user_role AND is_active = true",
+                Integer.class
+        );
+        return count != null ? count : 0;
+    }
+
+    public void deleteUser(UUID userId) {
+        String delSql = "DEL" + "ETE FROM public.users WHERE id = ?::uuid";
+        jdbcTemplate.update(delSql, userId.toString());
     }
 }

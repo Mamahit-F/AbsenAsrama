@@ -5,6 +5,7 @@ import type {
   CsvImportSummaryDto,
   ResidentProfileDto,
   ResidentStatus,
+  ScheduleSettingsDto,
   UpdateResidentRequest,
   UserAccountDto,
   UserRole,
@@ -65,7 +66,7 @@ export const adminApi = {
     const q = buildQuery({
       role: params.role,
       search: params.search,
-      limit: params.limit ?? 200,
+      limit: params.limit ?? 500,
       offset: params.offset ?? 0,
     });
     return apiRequest<UserAccountDto[]>(`/admin/users${q}`, { method: "GET" });
@@ -96,6 +97,30 @@ export const adminApi = {
     return apiRequest<void>(`/admin/users/${userId}/reset-password`, {
       method: "POST",
       body: { newPassword },
+    });
+  },
+
+  async updateUserHall(userId: string, hallName: string | null): Promise<UserAccountDto> {
+    return apiRequest<UserAccountDto>(`/admin/users/${userId}/hall`, {
+      method: "PATCH",
+      body: { hallName },
+    });
+  },
+
+  async deleteUser(userId: string): Promise<void> {
+    return apiRequest<void>(`/admin/users/${userId}`, {
+      method: "DELETE",
+    });
+  },
+
+  async getScheduleSettings(): Promise<ScheduleSettingsDto> {
+    return apiRequest<ScheduleSettingsDto>("/schedules/settings", { method: "GET" });
+  },
+
+  async updateScheduleSettings(maxDailySessions: number): Promise<ScheduleSettingsDto> {
+    return apiRequest<ScheduleSettingsDto>("/schedules/settings", {
+      method: "PUT",
+      body: { maxDailySessions },
     });
   },
 };
