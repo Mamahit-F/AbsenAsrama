@@ -14,5 +14,5 @@ COPY --from=build /app/target/*.jar app.jar
 
 EXPOSE 8080
 
-# Tuned for 512 MB free-tier containers (Render / Koyeb)
-ENTRYPOINT ["sh", "-c", "java -XX:+UseSerialGC -Xms128m -Xmx320m -Dserver.port=${PORT:-8080} -jar app.jar"]
+# Adapts safely across both 512 MB free containers and higher-RAM Railway plans
+ENTRYPOINT ["sh", "-c", "java -XX:+UseSerialGC -XX:InitialRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0 -Dserver.port=${PORT:-8080} -jar app.jar"]
