@@ -1,0 +1,31 @@
+name: Sync AI Service to Hugging Face Space
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "ai_service/**"
+      - ".github/workflows/sync-ai-hf-space.yml"
+  workflow_dispatch:
+
+jobs:
+  sync-to-hf-space:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push ai_service subdirectory to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_REPO: ${{ secrets.HF_SPACE_REPO }}
+        run: |
+          if [ -z "$HF_TOKEN" ] || [ -z "$HF_SPACE_REPO" ]; then
+            echo "Set HF_TOKEN and HF_SPACE_REPO secrets in GitHub repository settings first."
+            exit 1
+          fi
+          git subtree split --prefix=ai_service -b hf-space
+          git push --force "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO}" hf-space:main

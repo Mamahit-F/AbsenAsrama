@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: absen-asrama-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    autoDeploy: true
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: TZ
+        value: Asia/Makassar
+      - key: APP_RLS_ENABLED
+        value: "true"
+      - key: AI_AUTO_START
+        value: "false"
+      - key: AI_CONNECT_TIMEOUT_MS
+        value: "5000"
+      - key: AI_READ_TIMEOUT_MS
+        value: "15000"
+      - key: SPRINGDOC_ENABLED
+        value: "false"
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: AI_SERVICE_BASE_URL
+        sync: false
+      - key: AI_SERVICE_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_FACE_BUCKET
+        value: face-enrollments
