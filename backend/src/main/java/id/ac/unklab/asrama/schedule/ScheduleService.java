@@ -32,6 +32,66 @@ public class ScheduleService {
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DATE_TIME_FMT = DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm");
 
+    // Poligon presisi batas wilayah Kampus UNKLAB Airmadidi (sinkron dengan frontend unklabBounds.ts)
+    private static final double[][] UNKLAB_POLYGON = {
+            {1.42010, 124.98265},
+            {1.42018, 124.98315},
+            {1.42022, 124.98365},
+            {1.42015, 124.98420},
+            {1.41996, 124.98472},
+            {1.41965, 124.98498},
+            {1.41918, 124.98520},
+            {1.41862, 124.98524},
+            {1.41795, 124.98528},
+            {1.41748, 124.98528},
+            {1.41736, 124.98576},
+            {1.41712, 124.98598},
+            {1.41655, 124.98596},
+            {1.41612, 124.98582},
+            {1.41580, 124.98556},
+            {1.41538, 124.98520},
+            {1.41485, 124.98478},
+            {1.41442, 124.98438},
+            {1.41410, 124.98395},
+            {1.41392, 124.98345},
+            {1.41390, 124.98290},
+            {1.41415, 124.98245},
+            {1.41455, 124.98225},
+            {1.41512, 124.98218},
+            {1.41568, 124.98212},
+            {1.41618, 124.98188},
+            {1.41668, 124.98162},
+            {1.41708, 124.98172},
+            {1.41758, 124.98212},
+            {1.41812, 124.98248},
+            {1.41868, 124.98276},
+            {1.41918, 124.98282},
+            {1.41968, 124.98265}
+    };
+
+    private static boolean isInsideUnklabCampus(double lat, double lon) {
+        if (!Double.isFinite(lat) || !Double.isFinite(lon)) {
+            return false;
+        }
+        if (lat < 1.41390 || lat > 1.42022 || lon < 124.98162 || lon > 124.98598) {
+            return false;
+        }
+        boolean inside = false;
+        int n = UNKLAB_POLYGON.length;
+        for (int i = 0, j = n - 1; i < n; j = i++) {
+            double yi = UNKLAB_POLYGON[i][0];
+            double xi = UNKLAB_POLYGON[i][1];
+            double yj = UNKLAB_POLYGON[j][0];
+            double xj = UNKLAB_POLYGON[j][1];
+            boolean intersects = ((yi > lat) != (yj > lat))
+                    && (lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi);
+            if (intersects) {
+                inside = !inside;
+            }
+        }
+        return inside;
+    }
+
     private final ScheduleRepository scheduleRepository;
     private final SecurityUtils securityUtils;
     private ResidentRepository residentRepository;
@@ -452,6 +512,12 @@ public class ScheduleService {
             }
             if (request.longitude() < -180.0 || request.longitude() > 180.0) {
                 throw BusinessException.badRequest("INVALID_LONGITUDE", "Longitude harus berada dalam rentang -180 sampai 180");
+            }
+            if (!isInsideUnklabCampus(request.latitude(), request.longitude())) {
+                throw BusinessException.badRequest(
+                        "OUTSIDE_UNKLAB_AREA",
+                        "Titik koordinat lokasi hanya diperbolehkan di dalam batas area Kampus UNKLAB"
+                );
             }
             if (request.radiusM() <= 0) {
                 throw BusinessException.badRequest("INVALID_RADIUS", "Radius presensi harus lebih besar dari 0 meter");

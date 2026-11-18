@@ -6,6 +6,7 @@ import { Button, Card, Chip, Field, Segmented } from "../../components/ui";
 import { isApiError, mapFieldErrors, schedulesApi, type ScheduleDto } from "../../api";
 import { useToast } from "../../state/app";
 import { DAY_LABEL, fmtDate, isoDayToUi, shiftDate, toWitaDate, toWitaTime, uiDayToIso, wita } from "../../lib/utils";
+import { UNKLAB_CENTER, isInsideUnklabBounds } from "../../lib/unklabBounds";
 
 const GeofenceMapPicker = lazy(() => import("../../components/GeofenceMapPicker"));
 
@@ -211,11 +212,18 @@ export default function ScheduleForm() {
     setGeoLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        setGeoLocating(false);
+        if (!isInsideUnklabBounds(pos.coords.latitude, pos.coords.longitude)) {
+          const msg = "Lokasi GPS saat ini berada di luar batas area Kampus UNKLAB. Titik lokasi hanya diperbolehkan di dalam area UNKLAB.";
+          setErr(msg);
+          toast(msg, "error");
+          return;
+        }
         setGeoLat(pos.coords.latitude.toFixed(6));
         setGeoLon(pos.coords.longitude.toFixed(6));
         setGeoAccuracy(Math.round(pos.coords.accuracy));
         setGeoSource("gps");
-        setGeoLocating(false);
+        setErr("");
         toast(`Titik lokasi perangkat berhasil diambil (±${Math.round(pos.coords.accuracy)}m)`);
       },
       (geoErr) => {
@@ -302,6 +310,12 @@ export default function ScheduleForm() {
       }
       if (isNaN(lonNum) || lonNum < -180 || lonNum > 180) {
         setErr("Nilai longitude harus berupa angka antara -180 sampai 180.");
+        return;
+      }
+      if (!isInsideUnklabBounds(latNum, lonNum)) {
+        const msg = "Titik koordinat lokasi harus berada di dalam batas area Kampus UNKLAB.";
+        setErr(msg);
+        toast(msg, "error");
         return;
       }
       if (geoRadius <= 0) {
@@ -634,16 +648,18 @@ export default function ScheduleForm() {
                       }
                     >
                       <GeofenceMapPicker
-                        latitude={parseFloat(geoLat) || 1.4172}
-                        longitude={parseFloat(geoLon) || 124.9835}
+                        latitude={parseFloat(geoLat) || UNKLAB_CENTER.lat}
+                        longitude={parseFloat(geoLon) || UNKLAB_CENTER.lon}
                         radiusM={geoRadius > 0 ? geoRadius : 50}
                         onChange={(lat, lon) => {
+                          if (!isInsideUnklabBounds(lat, lon)) return;
                           setGeoLat(lat.toFixed(6));
                           setGeoLon(lon.toFixed(6));
                           setGeoAccuracy(null);
                           setGeoSource("map");
                           setErr("");
                         }}
+                        onRejectOutside={(msg) => toast(msg, "error")}
                       />
                     </Suspense>
                   )}

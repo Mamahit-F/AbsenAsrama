@@ -14,6 +14,7 @@ import {
   User as UserIcon,
 } from "lucide-react";
 import { Countdown, LiveDot, easeOut } from "../../components/ui";
+import { useOceanWaveTransition } from "../../components/OceanWaveTransition";
 import { wita } from "../../lib/utils";
 import { roleHomePath, useAuth, useToast } from "../../state/app";
 
@@ -50,13 +51,14 @@ export default function Login() {
   const [err, setErr] = useState<{ msg: string; lockedUntil?: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
+  const { playOceanWaveTransition, isTransitioning } = useOceanWaveTransition();
   const toast = useToast();
   const nav = useNavigate();
   const w = wita();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (submitting || isTransitioning) return;
     setErr(null);
     setSubmitting(true);
     try {
@@ -65,8 +67,10 @@ export default function Login() {
         setErr({ msg: r.error, lockedUntil: r.lockedUntil });
         return;
       }
-      toast("Selamat datang kembali");
-      nav(roleHomePath(r.role), { replace: true });
+      playOceanWaveTransition(() => {
+        toast("Selamat datang kembali");
+        nav(roleHomePath(r.role), { replace: true });
+      });
     } finally {
       setSubmitting(false);
     }
@@ -105,8 +109,16 @@ export default function Login() {
       <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-8">
         <motion.div
           initial={{ opacity: 0, y: 18, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.55, ease: easeOut }}
+          animate={
+            isTransitioning
+              ? { opacity: 0.35, y: 8, scale: 0.96 }
+              : { opacity: 1, y: 0, scale: 1 }
+          }
+          transition={
+            isTransitioning
+              ? { duration: 0.42, ease: easeOut }
+              : { duration: 0.55, ease: easeOut }
+          }
           className="w-full max-w-[420px]"
         >
           <div className="rounded-[28px] border border-white/15 bg-[#0e0d24]/75 p-6 shadow-[0_24px_60px_-15px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl sm:p-7">
@@ -195,11 +207,11 @@ export default function Login() {
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || isTransitioning}
                 className="mt-1 inline-flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-gradient-to-br from-[#D5F0EA] via-[#3CC4AE] to-[#0E8F7E] font-display text-sm font-bold text-[#09081a] shadow-[0_0_0_1px_rgba(213,240,234,0.4),0_12px_26px_-8px_rgba(60,196,174,0.5)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-55"
               >
                 <LogIn className="size-4" aria-hidden />
-                {submitting ? "Memverifikasi…" : "Masuk"}
+                {submitting || isTransitioning ? "Memverifikasi…" : "Masuk"}
               </button>
             </form>
           </div>

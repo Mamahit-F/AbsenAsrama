@@ -33,6 +33,7 @@ import {
 import { cn } from "../lib/utils";
 import { useAuth, type Role, type User } from "../state/app";
 import { useTheme } from "../state/theme";
+import { useOceanWaveTransition } from "./OceanWaveTransition";
 import { Avatar, IconButton, easeOut, spring } from "./ui";
 import { SkyToggle } from "./ui/sky-toggle";
 
@@ -325,13 +326,21 @@ const pageVariants: Variants = {
 export function Page({ children, className, nav = true }: { children: ReactNode; className?: string; nav?: boolean }) {
   const d = useContext(DirCtx);
   const { hasSidebar } = useNavShell();
+  const { enteringFromLogin } = useOceanWaveTransition();
+  const mountFromLoginRef = useRef(enteringFromLogin);
+
   return (
     <motion.main
       custom={d}
-      variants={pageVariants}
-      initial="initial"
-      animate="enter"
-      exit="exit"
+      variants={mountFromLoginRef.current ? undefined : pageVariants}
+      initial={mountFromLoginRef.current ? { opacity: 1, scale: 0.985 } : "initial"}
+      animate={
+        mountFromLoginRef.current
+          ? { opacity: 1, scale: 1, transitionEnd: { transform: "none" } }
+          : "enter"
+      }
+      exit={mountFromLoginRef.current ? { opacity: 0 } : "exit"}
+      transition={mountFromLoginRef.current ? { duration: 0.75, ease: easeOut } : undefined}
       className={cn(
         "min-h-dvh px-5 pt-[max(0.75rem,env(safe-area-inset-top))]",
         hasSidebar && "lg:px-0 lg:pt-0",
@@ -976,6 +985,8 @@ function SidebarContent({
 export function NavigationShell({ user }: { user: User }) {
   const nav = useNavigate();
   const { hasSidebar, isDesktop, drawerOpen, setDrawerOpen, collapsed, setCollapsed } = useNavShell();
+  const { enteringFromLogin } = useOceanWaveTransition();
+  const mountFromLoginRef = useRef(enteringFromLogin);
   const closeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -992,8 +1003,13 @@ export function NavigationShell({ user }: { user: User }) {
         aria-label="Sidebar navigasi"
         data-glass="card"
         data-radius="32"
-        initial={false}
-        animate={{ width: collapsed ? 88 : 256 }}
+        initial={mountFromLoginRef.current ? { opacity: 1, scale: 0.985 } : false}
+        animate={{
+          opacity: 1,
+          scale: 1,
+          width: collapsed ? 88 : 256,
+          transitionEnd: { transform: "none" },
+        }}
         transition={dockSpring}
         className={cn(
           "lg-optical-sidebar sticky top-[20px] z-40 hidden h-[calc(100dvh-40px)] shrink-0 flex-col rounded-[32px] lg:flex",

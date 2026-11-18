@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
-import { Bell, CheckCircle2, ChevronRight, Clock3, History, RefreshCw, ScanFace, ShieldAlert, ShieldCheck, UserRound } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock3, History, RefreshCw, ScanFace, ShieldAlert, ShieldCheck, UserRound } from "lucide-react";
 import { NightHeader, Page } from "../../components/layout";
 import { Ring } from "../../components/charts";
 import { Avatar, Badge, Button, Card, IconButton, IconTile, Item, LiveDot, Meter, Num, PressCard, SectionTitle, easeOut, methodTone, spring } from "../../components/ui";
@@ -142,11 +142,6 @@ export default function ResidentHome() {
   return (
     <Page>
       <NightHeader
-        left={
-          <IconButton label="Muat ulang" tone="glass" onClick={() => void loadData()}>
-            <Bell className="size-5" aria-hidden />
-          </IconButton>
-        }
         center={
           <button onClick={() => nav("/penghuni/profil")} aria-label="Profil" className="block">
             <Avatar name={displayName} size={46} />

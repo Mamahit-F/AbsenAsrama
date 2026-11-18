@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { AlertTriangle, Compass, ShieldAlert } from "lucide-react";
 import {
   Ambient,
@@ -14,6 +14,11 @@ import {
   useNavShell,
 } from "./components/layout";
 import { AuroraOrb } from "./components/AuroraOrb";
+import {
+  OceanWaveTransition,
+  OceanWaveTransitionProvider,
+  useOceanWaveTransition,
+} from "./components/OceanWaveTransition";
 import { Button, Card, GradientDefs } from "./components/ui";
 import { LiquidGlassStage } from "./components/ui/LiquidGlassStage";
 import { roleHomePath, useAuth, type Role } from "./state/app";
@@ -162,6 +167,7 @@ function AppShell({ dirValue }: { dirValue: number }) {
   const { user } = useAuth();
   const loc = useLocation();
   const { hasSidebar, isDesktop, drawerOpen } = useNavShell();
+  const { enteringFromLogin, registerRevealElement } = useOceanWaveTransition();
 
   const isPublicOrbRoute = loc.pathname === "/" || loc.pathname === "/masuk";
 
@@ -173,15 +179,24 @@ function AppShell({ dirValue }: { dirValue: number }) {
           initial={
             isPublicOrbRoute
               ? { opacity: 0, y: 14 }
-              : { opacity: 0 }
+              : enteringFromLogin
+                ? false
+                : { opacity: 0 }
           }
-          animate={{ opacity: 1, y: 0 }}
+          animate={
+            isPublicOrbRoute
+              ? { opacity: 1, y: 0 }
+              : { opacity: 1 }
+          }
           exit={
             isPublicOrbRoute
               ? { opacity: 0, y: -10 }
               : { opacity: 0 }
           }
-          transition={{ duration: isPublicOrbRoute ? 0.34 : 0.18, ease: [0.16, 1, 0.3, 1] }}
+          transition={{
+            duration: isPublicOrbRoute ? 0.34 : enteringFromLogin ? 0.1 : 0.18,
+            ease: [0.16, 1, 0.3, 1],
+          }}
           className="relative z-10 min-h-dvh w-full"
         >
           <Routes location={loc}>
@@ -252,7 +267,10 @@ function AppShell({ dirValue }: { dirValue: number }) {
   return (
     <>
       <LiquidGlassStage enabled />
-      <div className="relative z-10 min-h-dvh w-full lg:flex lg:items-start lg:gap-[20px] lg:p-[20px]">
+      <div
+        ref={registerRevealElement}
+        className="relative z-10 min-h-dvh w-full lg:flex lg:items-start lg:gap-[20px] lg:p-[20px]"
+      >
         <NavigationShell user={user} />
         <motion.div
           initial={false}
@@ -297,14 +315,19 @@ export default function App() {
   const isPublicOrbRoute = loc.pathname === "/" || loc.pathname === "/masuk";
 
   return (
-    <ThemeProvider hasWebglStage={!isPublicOrbRoute}>
-      <AppErrorBoundary>
-        <LiquidGlassFilters />
-        <GradientDefs />
-        <NavProvider hasSidebar={showSidebar}>
-          <AppShell dirValue={dir.current} />
-        </NavProvider>
-      </AppErrorBoundary>
-    </ThemeProvider>
+    <MotionConfig reducedMotion="user">
+      <ThemeProvider hasWebglStage={!isPublicOrbRoute}>
+        <OceanWaveTransitionProvider>
+          <AppErrorBoundary>
+            <LiquidGlassFilters />
+            <GradientDefs />
+            <NavProvider hasSidebar={showSidebar}>
+              <AppShell dirValue={dir.current} />
+            </NavProvider>
+            <OceanWaveTransition />
+          </AppErrorBoundary>
+        </OceanWaveTransitionProvider>
+      </ThemeProvider>
+    </MotionConfig>
   );
 }
